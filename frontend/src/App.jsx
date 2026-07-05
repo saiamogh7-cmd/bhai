@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import QRCheck from './pages/QRCheck';
 import EmailCheck from './pages/EmailCheck';
-import Hero3D from './components/Hero3D';
+import HeroHand from './components/HeroHand';
 import './App.css';
 
 // ─── Matrix Rain Component ─────────────────────────────────────────────────────
@@ -228,7 +228,7 @@ export default function App() {
 
               {/* Right: 3-D globe */}
               <div className="md:col-span-5 flex justify-center items-center h-full relative z-10 py-6">
-                <Hero3D />
+                <HeroHand />
               </div>
             </section>
 
