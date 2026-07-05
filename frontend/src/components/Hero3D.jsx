@@ -2,114 +2,186 @@ import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
 export default function Hero3D() {
-  const mountRef = useRef(null);
+  const containerRef = useRef(null);
 
   useEffect(() => {
-    if (!mountRef.current) return;
+    if (!containerRef.current) return;
 
-    const width = mountRef.current.clientWidth || 300;
-    const height = mountRef.current.clientHeight || 300;
+    const width = containerRef.current.clientWidth || 300;
+    const height = containerRef.current.clientHeight || 300;
 
-    // Scene setup
+    // 1. Scene Setup
     const scene = new THREE.Scene();
     
-    // Camera
+    // 2. Camera Setup
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-    camera.position.z = 6.5;
+    camera.position.z = 7;
 
-    // Renderer
+    // 3. Renderer Setup
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    mountRef.current.appendChild(renderer.domElement);
+    containerRef.current.appendChild(renderer.domElement);
 
-    // Create a shield/globe technical model using an Icosahedron
-    const geometry = new THREE.IcosahedronGeometry(2.0, 1);
+    // 4. Parallax Group
+    // Add all meshes to a master group so we can tilt the entire coordinate frame based on the mouse.
+    const masterGroup = new THREE.Group();
+    scene.add(masterGroup);
+
+    // 5. Threat Globe (glowing dots/nodes connected by wireframe lines)
+    const globeGeometry = new THREE.IcosahedronGeometry(2.0, 2); // Higher detail for dots
     
-    // Outer wireframe mesh (Cyan)
-    const wireframeMaterial = new THREE.MeshBasicMaterial({
-      color: 0x06b6d4, // Cyan-500
+    // Wireframe connection lines
+    const lineMaterial = new THREE.MeshBasicMaterial({
+      color: 0x00ff9d, // Neon green accent
       wireframe: true,
       transparent: true,
-      opacity: 0.18,
+      opacity: 0.12,
     });
-    const mesh = new THREE.Mesh(geometry, wireframeMaterial);
-    scene.add(mesh);
+    const globeLines = new THREE.Mesh(globeGeometry, lineMaterial);
+    masterGroup.add(globeLines);
 
-    // Outer vertices / glowing points (Cyan-400)
-    const pointsMaterial = new THREE.PointsMaterial({
-      color: 0x22d3ee, // Cyan-400
-      size: 0.08,
+    // Node dots
+    const nodeMaterial = new THREE.PointsMaterial({
+      color: 0x00d9ff, // Electric Cyan
+      size: 0.06,
       transparent: true,
-      opacity: 0.65,
+      opacity: 0.75,
     });
-    const points = new THREE.Points(geometry, pointsMaterial);
-    scene.add(points);
+    const globeNodes = new THREE.Points(globeGeometry, nodeMaterial);
+    masterGroup.add(globeNodes);
 
-    // Inner core shield element (small wireframe octahedron)
-    const innerGeo = new THREE.OctahedronGeometry(0.9, 0);
-    const innerMaterial = new THREE.MeshBasicMaterial({
-      color: 0x0e7490, // Cyan-700
+    // 6. Central Shield/Core Icon (simple geometry rotating inside the globe)
+    const coreGeometry = new THREE.OctahedronGeometry(0.7, 0);
+    const coreMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff003c, // Glitch Red for the warning core
       wireframe: true,
       transparent: true,
-      opacity: 0.3,
+      opacity: 0.4,
     });
-    const innerMesh = new THREE.Mesh(innerGeo, innerMaterial);
-    scene.add(innerMesh);
+    const coreMesh = new THREE.Mesh(coreGeometry, coreMaterial);
+    masterGroup.add(coreMesh);
 
-    // Animation variables
+    // 7. Drifting Upward Data Packets (particles)
+    const particleCount = 60;
+    const particleGeometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const speeds = [];
+
+    for (let i = 0; i < particleCount; i++) {
+      // Random spread in cylinder/sphere shape
+      const theta = Math.random() * Math.PI * 2;
+      const radius = 1.0 + Math.random() * 2.5;
+      positions[i * 3] = Math.cos(theta) * radius; // X
+      positions[i * 3 + 1] = (Math.random() - 0.5) * 5.0; // Y
+      positions[i * 3 + 2] = Math.sin(theta) * radius; // Z
+      
+      speeds.push(0.01 + Math.random() * 0.02); // Upward float speed
+    }
+
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    
+    const packetMaterial = new THREE.PointsMaterial({
+      color: 0x00ff9d, // Neon green packets
+      size: 0.05,
+      transparent: true,
+      opacity: 0.5,
+    });
+    const dataPackets = new THREE.Points(particleGeometry, packetMaterial);
+    masterGroup.add(dataPackets);
+
+    // 8. Mouse Parallax event listeners
+    let mouseX = 0;
+    let mouseY = 0;
+    let targetX = 0;
+    let targetY = 0;
+
+    const handleMouseMove = (e) => {
+      const rect = containerRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left - rect.width / 2;
+      const y = e.clientY - rect.top - rect.height / 2;
+      // Convert to normalized coordinates (-0.5 to 0.5)
+      targetX = x / rect.width;
+      targetY = y / rect.height;
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+
+    // 9. Animation Loop
     let animationId;
+    const posAttribute = particleGeometry.getAttribute('position');
+
     const animate = () => {
       animationId = requestAnimationFrame(animate);
+
+      // Slow auto-rotations
+      globeLines.rotation.y += 0.001;
+      globeLines.rotation.x += 0.0005;
+      globeNodes.rotation.y += 0.001;
+      globeNodes.rotation.x += 0.0005;
+
+      coreMesh.rotation.y -= 0.003;
+      coreMesh.rotation.z += 0.0015;
+
+      // Animate drifting data packets (upward)
+      const positionsArr = posAttribute.array;
+      for (let i = 0; i < particleCount; i++) {
+        positionsArr[i * 3 + 1] += speeds[i]; // Move Y up
+        
+        // Reset if drifted too high
+        if (positionsArr[i * 3 + 1] > 3.0) {
+          positionsArr[i * 3 + 1] = -3.0;
+        }
+      }
+      posAttribute.needsUpdate = true;
+
+      // Interpolate mouse movements for smooth parallax tilt
+      mouseX += (targetX - mouseX) * 0.05;
+      mouseY += (targetY - mouseY) * 0.05;
       
-      // Understated, slow-moving rotation
-      mesh.rotation.y += 0.0012;
-      mesh.rotation.x += 0.0006;
-      
-      points.rotation.y += 0.0012;
-      points.rotation.x += 0.0006;
-      
-      innerMesh.rotation.y -= 0.002;
-      innerMesh.rotation.x -= 0.001;
-      
+      // Tilt coordinates based on cursor offset
+      masterGroup.rotation.y = mouseX * 0.5;
+      masterGroup.rotation.x = -mouseY * 0.5;
+
       renderer.render(scene, camera);
     };
     animate();
 
-    // Handle Resize
+    // 10. Handle Resize
     const handleResize = () => {
-      if (!mountRef.current) return;
-      const w = mountRef.current.clientWidth;
-      const h = mountRef.current.clientHeight;
+      if (!containerRef.current) return;
+      const w = containerRef.current.clientWidth;
+      const h = containerRef.current.clientHeight;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
     };
     window.addEventListener('resize', handleResize);
 
-    // Clean up
+    // Clean up resources on unmount
     return () => {
       cancelAnimationFrame(animationId);
+      window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('resize', handleResize);
-      if (mountRef.current && renderer.domElement) {
-        // Safe check to avoid DOM exceptions
-        if (mountRef.current.contains(renderer.domElement)) {
-          mountRef.current.removeChild(renderer.domElement);
+      if (containerRef.current && renderer.domElement) {
+        if (containerRef.current.contains(renderer.domElement)) {
+          containerRef.current.removeChild(renderer.domElement);
         }
       }
-      geometry.dispose();
-      wireframeMaterial.dispose();
-      pointsMaterial.dispose();
-      innerGeo.dispose();
-      innerMaterial.dispose();
+      globeGeometry.dispose();
+      lineMaterial.dispose();
+      nodeMaterial.dispose();
+      coreGeometry.dispose();
+      coreMaterial.dispose();
+      particleGeometry.dispose();
+      packetMaterial.dispose();
       renderer.dispose();
     };
   }, []);
 
   return (
     <div 
-      ref={mountRef} 
-      className="w-full h-[220px] sm:h-[300px] flex items-center justify-center relative overflow-hidden"
+      ref={containerRef} 
+      className="w-full h-[220px] sm:h-[320px] flex items-center justify-center relative overflow-hidden"
     />
   );
 }

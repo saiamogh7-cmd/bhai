@@ -3,7 +3,7 @@ import { checkEmail } from '../api/client';
 import VerdictCard from '../components/VerdictCard';
 import PipelineVisualization from '../components/PipelineVisualization';
 
-export default function EmailCheck() {
+export default function EmailCheck({ onScanComplete }) {
   const [content, setContent] = useState('');
   const [status, setStatus] = useState('idle'); // idle | loading | success | error
   const [currentStep, setCurrentStep] = useState(0);
@@ -17,6 +17,7 @@ export default function EmailCheck() {
     setErrorMsg('');
     setResult(null);
     setCurrentStep(0); // Step 1: PARSE
+    if (onScanComplete) onScanComplete(null);
 
     try {
       // Simulate scanning process flow (2.5s duration)
@@ -37,9 +38,11 @@ export default function EmailCheck() {
 
       setResult(apiResponse);
       setStatus('success');
+      if (onScanComplete) onScanComplete(apiResponse);
     } catch (err) {
       console.error(err);
       setStatus('error');
+      if (onScanComplete) onScanComplete(null);
       if (err.message.includes('TIMEOUT')) {
         setErrorMsg('SCAN TIMEOUT: Connection timed out. The classification server failed to respond in time.');
       } else if (err.message.includes('RATE_LIMIT')) {
@@ -49,6 +52,7 @@ export default function EmailCheck() {
       }
     }
   };
+
 
   const isScanning = status === 'loading';
 

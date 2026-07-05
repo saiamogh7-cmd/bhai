@@ -12,25 +12,39 @@ def extract_hostname(url: str) -> str:
     parsed = urllib.parse.urlparse(url)
     return parsed.netloc or parsed.path.split("/")[0]
 
-def get_domain_age_days(url: str) -> Optional[int]:
+import concurrent.futures
+
+# Global executor for WHOIS queries. This prevents local with-block shutdowns from waiting for timed-out threads.
+_whois_executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
+
+def get_domain_age_days(url: str, timeout: float = 2.0) -> Optional[int]:
     """
     Performs a WHOIS query to determine the registration age of the domain in days.
+    Uses a global thread pool to enforce a strict timeout.
     """
     hostname = extract_hostname(url)
+    
+    future = _whois_executor.submit(whois.whois, hostname)
     try:
-        w = whois.whois(hostname)
+        w = future.result(timeout=timeout)
         creation_date = w.creation_date
         
-        # creation_date can be a list of dates (for multiple registrars/entries) or a single date
+        # creation_date can be a list of dates or a single date
         if isinstance(creation_date, list):
             creation_date = creation_date[0]
             
         if isinstance(creation_date, datetime):
+            if creation_date.tzinfo is not None:
+                creation_date = creation_date.replace(tzinfo=None)
             age = (datetime.utcnow() - creation_date).days
             return age
+    except concurrent.futures.TimeoutError:
+        print(f"WHOIS lookup timed out for {hostname} (limit {timeout}s)")
     except Exception as e:
         print(f"WHOIS lookup failed for {hostname}: {e}")
     return None
+
+
 
 def check_ssl(url: str, port: int = 443, timeout: float = 3.0) -> Tuple[str, str]:
     """

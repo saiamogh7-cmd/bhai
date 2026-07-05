@@ -69,7 +69,7 @@ def check_reputation(url: str) -> Tuple[bool, List[str]]:
                 malicious = stats.get("malicious", 0)
                 suspicious = stats.get("suspicious", 0)
                 
-                if malicious > 0:
+                if malicious > 1:
                     is_flagged = True
                     reasons.append(f"VirusTotal flagged domain as malicious ({malicious} engines).")
                 elif suspicious > 1:

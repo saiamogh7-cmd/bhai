@@ -9,7 +9,19 @@ from dotenv import load_dotenv
 from backend.app.risk_engine import assess_qr_risk, assess_email_risk
 
 # Load environment variables
+import os
 load_dotenv()
+backend_env = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+if os.path.exists(backend_env):
+    load_dotenv(backend_env, override=True)
+
+print(f"DEBUG: backend_env is {backend_env}, exists: {os.path.exists(backend_env)}", flush=True)
+print(f"ENV CONF: SAFE_BROWSING_API_KEY present: {bool(os.getenv('SAFE_BROWSING_API_KEY'))}", flush=True)
+print(f"ENV CONF: VIRUSTOTAL_API_KEY present: {bool(os.getenv('VIRUSTOTAL_API_KEY'))}", flush=True)
+print(f"ENV CONF: LLM_API_KEY present: {bool(os.getenv('LLM_API_KEY'))}", flush=True)
+
+
+
 
 app = FastAPI(
     title="Fan Fraud Shield API",
@@ -68,3 +80,16 @@ def check_email(payload: EmailCheckRequest):
     """
     risk_report = assess_email_risk(payload.content)
     return risk_report
+
+from fastapi.responses import RedirectResponse
+
+@app.get("/r1")
+def redirect_1():
+    """First hop: redirects to /r2"""
+    return RedirectResponse(url="http://localhost:8000/r2")
+
+@app.get("/r2")
+def redirect_2():
+    """Second hop: redirects to expired.badssl.com"""
+    return RedirectResponse(url="https://expired.badssl.com")
+

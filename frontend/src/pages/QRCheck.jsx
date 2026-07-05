@@ -4,7 +4,7 @@ import { checkQR } from '../api/client';
 import VerdictCard from '../components/VerdictCard';
 import PipelineVisualization from '../components/PipelineVisualization';
 
-export default function QRCheck() {
+export default function QRCheck({ onScanComplete }) {
   const [file, setFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [decodedUrl, setDecodedUrl] = useState('');
@@ -31,6 +31,7 @@ export default function QRCheck() {
     setErrorMsg('');
     setStatus('idle');
     setCurrentStep(0);
+    if (onScanComplete) onScanComplete(null);
   };
 
   const startScan = async () => {
@@ -40,6 +41,7 @@ export default function QRCheck() {
     setErrorMsg('');
     setResult(null);
     setCurrentStep(0); // Step 1: DECODE
+    if (onScanComplete) onScanComplete(null);
 
     // Set up FileReader to parse the image data
     const reader = new FileReader();
@@ -83,9 +85,11 @@ export default function QRCheck() {
 
           setResult(apiResponse);
           setStatus('success');
+          if (onScanComplete) onScanComplete(apiResponse);
         } catch (err) {
           console.error(err);
           setStatus('error');
+          if (onScanComplete) onScanComplete(null);
           if (err.message.includes('NO_QR')) {
             setErrorMsg('QR DECODE FAILED: Could not locate a QR code signature. Ensure the code is clear and well-lit.');
           } else if (err.message.includes('TIMEOUT')) {
@@ -101,6 +105,7 @@ export default function QRCheck() {
     };
     reader.readAsDataURL(file);
   };
+
 
   const isScanning = status === 'loading';
 
