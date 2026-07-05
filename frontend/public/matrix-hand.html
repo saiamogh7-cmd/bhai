@@ -1,17 +1,19 @@
 <!DOCTYPE html>
 <!--
-  Matrix Shield Hero Effect
-  =========================
-  Fan Fraud Shield — Team KAY
+  Matrix Shield 3D — Three.js Particle Shield Hero
+  =================================================
+  Depends on: Three.js r134 via CDN (see script tag below)
 
   HOW TO EMBED:
-  (1) As <iframe> background:
+  (1) As <iframe> background —
       <iframe src="matrix-shield.html"
         style="position:absolute;inset:0;width:100%;height:100%;border:none;pointer-events:none;">
       </iframe>
 
-  (2) Copy the two <canvas> elements + <script> block directly into your page.
-      Parent must have position:relative or position:absolute.
+  (2) Copy into your page —
+      - Paste the two <canvas> elements and the two <script> tags where you want them.
+      - Make the parent container position:relative/absolute with an explicit
+        width and height, and add overflow:hidden.
 -->
 <html lang="en">
 <head>
@@ -19,204 +21,113 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Matrix Shield</title>
 <style>
-  *{margin:0;padding:0;box-sizing:border-box}
-  html,body{width:100%;height:100%;overflow:hidden;background:#000}
-  #wrap{position:relative;width:100%;height:100%}
-  canvas{position:absolute;top:0;left:0;display:block}
-  #rc{z-index:1}
-  #pc{z-index:2}
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000 }
+  #wrap { position:relative; width:100%; height:100% }
+  canvas { position:absolute; top:0; left:0; display:block }
+  #rain { z-index:1 }
+  #gl   { z-index:2; background:transparent }
 </style>
 </head>
 <body>
 <div id="wrap">
-  <canvas id="rc"></canvas>
-  <canvas id="pc"></canvas>
+  <canvas id="rain"></canvas>
+  <canvas id="gl"></canvas>
 </div>
+
+<!-- Three.js r134 — stable, all APIs used here are present -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+
 <script>
 'use strict';
-
-// ══════════════════════════════════════════════════════════════
-//  TUNABLE CONSTANTS — edit freely
-// ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+//  TUNABLE CONSTANTS
+// ══════════════════════════════════════════════════════════
 const CFG = {
-  // Shield size
-  SHIELD_H_RATIO : 0.62,      // shield height as fraction of viewport height
-  SHIELD_CENTER_X: 0.50,      // horizontal centre (0–1 of viewport width)
-  SHIELD_CENTER_Y: 0.50,      // vertical centre
+  // Particles
+  PARTICLE_COUNT_DESKTOP : 4200,   // reduced on mobile automatically
+  PARTICLE_SIZE          : 0.045,  // world-unit radius of glow sprite
+  CORE_COLOR : [0.22, 1.0,  0.55], // RGB 0–1 — bright green core
+  MID_COLOR  : [0.0,  0.78, 0.38], // RGB 0–1 — mid glow
 
-  // Particle appearance
-  GLOW_RADIUS    : 10,         // px — glow sprite radius
-  CORE_COLOR     : '#39ff88',  // bright centre
-  MID_COLOR      : '#00cc55',  // mid glow ring
+  // Shield geometry
+  SHIELD_HEIGHT    : 2.2,    // world units — drives camera distance too
+  SHIELD_W_H_RATIO : 0.78,   // width / height
+  EXTRUDE_DEPTH    : 0.18,   // thickness of the shield
+  BEVEL_THICK      : 0.032,
+  BEVEL_SIZE       : 0.032,
+  BEVEL_SEGS       : 4,
 
-  // Shape sampling
-  SAMPLE_STRIDE  : 3,          // px step when scanning the shield mask (lower = more particles)
-  TARGET_DENSITY : 3500,       // max particles (sub-sampled if too many)
+  // Lighting (virtual fixed directional light, world space)
+  LIGHT_DIR : { x: -0.55, y: 0.75, z: 0.38 }, // normalised below
 
-  // Cycle timing (seconds)
-  FALL_DUR      : 2.5,         // particles build the shield top-to-bottom over this time
-  HOLD_DUR      : 5.0,         // how long shield stays fully formed
-  DISPERSE_DUR  : 1.8,         // fade-out duration before next cycle
+  // Animation timings (seconds)
+  ASSEMBLE_DUR  : 2.6,  // total time to build shield top-down
+  STAGGER_FRAC  : 0.62, // fraction of ASSEMBLE_DUR used for stagger delays
+  HOLD_DUR      : 5.5,  // how long fully formed shield stays
+  DISPERSE_DUR  : 1.8,  // fade-out duration
 
-  // Idle (formed) feel
-  JITTER_AMP    : 1.1,         // max px of sine micro-jitter
-  FLICKER_PROB  : 0.004,       // chance per particle per frame to flicker
+  // Idle behaviour
+  ROTATE_SPEED   : 0.20,  // rad/s (~31 s per full turn)
+  JITTER_AMP     : 0.018, // world units of idle particle micro-jitter
+  FLICKER_PROB   : 0.005, // per-particle per-frame chance of brightness flicker
+
+  // Camera
+  CAMERA_FOV       : 48,
+  CAMERA_PARALLAX  : 0.35, // world units of camera shift at max mouse offset
 
   // Matrix rain
-  RAIN_FS       : 14,          // font size px
-  RAIN_CHARS    : '0123456789ABCDEF',
-  RAIN_FADE     : 'rgba(0,0,0,0.05)',
-  RAIN_SPD_MIN  : 0.9,
-  RAIN_SPD_MAX  : 2.6,
+  RAIN_FS      : 14,
+  RAIN_CHARS   : '0123456789ABCDEF',
+  RAIN_FADE    : 'rgba(0,0,0,0.055)',
+  RAIN_SPD_MIN : 0.8,
+  RAIN_SPD_MAX : 2.5,
 };
-// ══════════════════════════════════════════════════════════════
 
-const rc   = document.getElementById('rc');
-const pc   = document.getElementById('pc');
-const rCtx = rc.getContext('2d');
-const pCtx = pc.getContext('2d');
-const DPR  = Math.min(window.devicePixelRatio || 1, 2);
+// ── Normalise light direction ──────────────────────────────
+;(function(l) {
+  const len = Math.sqrt(l.x*l.x + l.y*l.y + l.z*l.z);
+  l.x/=len; l.y/=len; l.z/=len;
+})(CFG.LIGHT_DIR);
 
-let W = 0, H = 0;
+// ══════════════════════════════════════════════════════════
+//  WEBGL / REDUCED-MOTION DETECTION
+// ══════════════════════════════════════════════════════════
+const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function hasWebGL() {
+  try {
+    const c = document.createElement('canvas');
+    return !!(c.getContext('webgl') || c.getContext('experimental-webgl'));
+  } catch(e) { return false; }
+}
+
+const USE_3D = !REDUCED && hasWebGL();
+
+// ══════════════════════════════════════════════════════════
+//  RAIN LAYER (always runs)
+// ══════════════════════════════════════════════════════════
+const rainCanvas = document.getElementById('rain');
+const rCtx       = rainCanvas.getContext('2d');
 let rainCols = [];
-let particles  = [];
-let targets    = [];
-let glowSprite = null;
 
-// Phase state machine
-const PH = { FALLING:0, LOCKED:1, DISPERSING:2 };
-let phase = PH.FALLING, phaseT = 0, formed = false;
-
-// ── Glow sprite ──────────────────────────────────────────────
-function buildGlowSprite() {
-  const r  = CFG.GLOW_RADIUS;
-  const sz = r * 2 + 2;
-  const oc = document.createElement('canvas');
-  oc.width = oc.height = sz;
-  const ox = oc.getContext('2d');
-  const g  = ox.createRadialGradient(r+1,r+1,0, r+1,r+1,r);
-  g.addColorStop(0,   CFG.CORE_COLOR);
-  g.addColorStop(0.4, CFG.MID_COLOR);
-  g.addColorStop(1,   'rgba(0,0,0,0)');
-  ox.fillStyle = g;
-  ox.fillRect(0, 0, sz, sz);
-  glowSprite = oc;
-}
-
-// ── Shield silhouette path (clean classic shield) ────────────
-function shieldPath(ctx, cx, cy, sw, sh) {
-  // sw = width, sh = height, classic heraldic shield
-  const x = cx - sw/2, y = cy - sh/2;
-  const r = sw * 0.15;   // corner radius
-
-  ctx.beginPath();
-  // Top-left arc
-  ctx.moveTo(x + r, y);
-  // Top edge
-  ctx.lineTo(x + sw - r, y);
-  // Top-right arc
-  ctx.quadraticCurveTo(x + sw, y,       x + sw,     y + r);
-  // Right side (straight then taper)
-  ctx.lineTo(x + sw, y + sh * 0.52);
-  // Lower-right curve to bottom point
-  ctx.quadraticCurveTo(x + sw, y + sh * 0.80,  cx, y + sh);
-  // Lower-left curve from bottom point
-  ctx.quadraticCurveTo(x,      y + sh * 0.80,  x,  y + sh * 0.52);
-  // Left side
-  ctx.lineTo(x, y + r);
-  // Top-left arc close
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-}
-
-// ── Sample target points from shield shape ───────────────────
-function buildTargets() {
-  const sh  = H * CFG.SHIELD_H_RATIO;
-  const sw  = sh * 0.78;                       // shield aspect ~0.78
-  const cx  = W * CFG.SHIELD_CENTER_X;
-  const cy  = H * CFG.SHIELD_CENTER_Y;
-
-  // Draw shield on offscreen canvas to get mask
-  const ow = Math.ceil(sw + 4), oh = Math.ceil(sh + 4);
-  const oc = document.createElement('canvas');
-  oc.width  = ow;
-  oc.height = oh;
-  const ox  = oc.getContext('2d');
-  ox.clearRect(0, 0, ow, oh);
-
-  // Translate so shield centre aligns with offscreen centre
-  ox.save();
-  ox.translate(ow/2, oh/2);
-  shieldPath(ox, 0, 0, sw, sh);
-  ox.restore();
-  ox.fillStyle = '#fff';
-  ox.fill();
-
-  const pix  = ox.getImageData(0, 0, ow, oh).data;
-  const st   = CFG.SAMPLE_STRIDE;
-  const raw  = [];
-
-  for (let py = 0; py < oh; py += st)
-    for (let px = 0; px < ow; px += st)
-      if (pix[(py * ow + px)*4 + 3] > 128)
-        raw.push({
-          // Convert offscreen coords back to viewport coords
-          x: cx + (px - ow/2),
-          y: cy + (py - oh/2),
-        });
-
-  // Sub-sample if too dense
-  if (raw.length > CFG.TARGET_DENSITY) {
-    const step = raw.length / CFG.TARGET_DENSITY;
-    targets = [];
-    for (let i = 0; i < CFG.TARGET_DENSITY; i++)
-      targets.push(raw[Math.round(i * step)]);
-  } else {
-    targets = raw;
-  }
-}
-
-// ── Build / reset particles ──────────────────────────────────
-function buildParticles() {
-  // Sort top→bottom so shield builds down from the crest
-  const sorted = [...targets].sort((a, b) => a.y - b.y);
-  const total  = sorted.length;
-  particles = sorted.map((t, i) => ({
-    tx: t.x, ty: t.y,
-    x : t.x + (Math.random() - 0.5) * 20,
-    y : -Math.random() * H * 0.6 - 20,
-    vy: 250 + Math.random() * 380,
-    delay   : (i / total) * CFG.FALL_DUR,
-    settled : false,
-    alpha   : 0,
-    flicker : 1,
-    fTimer  : Math.random() * 1.5,
-    jPh     : Math.random() * Math.PI * 2,
-    jSx     : 0.7 + Math.random() * 1.0,
-    jSy     : 0.5 + Math.random() * 0.8,
-    jAmp    : 0.3 + Math.random() * CFG.JITTER_AMP,
-    ux      : (Math.random() - 0.5) * 180,  // disperse X drift
-    uy      : -(80 + Math.random() * 200),  // disperse Y (upward)
-  }));
-  phase  = PH.FALLING;
-  phaseT = 0;
-  formed = false;
-}
-
-// ── Rain ─────────────────────────────────────────────────────
-function buildRain() {
+function initRain(W, H) {
   const fs = CFG.RAIN_FS;
   const n  = Math.ceil(W / fs);
-  rainCols = Array.from({length: n}, (_, i) => ({
+  rainCols = Array.from({ length: n }, (_, i) => ({
     x    : i * fs,
     y    : Math.random() * H,
-    speed: CFG.RAIN_SPD_MIN + Math.random()*(CFG.RAIN_SPD_MAX-CFG.RAIN_SPD_MIN),
-    char : CFG.RAIN_CHARS[Math.floor(Math.random()*CFG.RAIN_CHARS.length)],
+    speed: CFG.RAIN_SPD_MIN + Math.random() * (CFG.RAIN_SPD_MAX - CFG.RAIN_SPD_MIN),
+    char : rndChar(),
     tick : 0,
   }));
 }
 
-function drawRain(dt) {
+function rndChar() {
+  return CFG.RAIN_CHARS[Math.floor(Math.random() * CFG.RAIN_CHARS.length)];
+}
+
+function drawRain(W, H, dt) {
   rCtx.fillStyle = CFG.RAIN_FADE;
   rCtx.fillRect(0, 0, W, H);
   rCtx.font = `${CFG.RAIN_FS}px monospace`;
@@ -225,141 +136,510 @@ function drawRain(dt) {
     col.tick += dt * 60;
     if (col.tick >= 1) {
       col.tick -= 1;
-      col.char  = CFG.RAIN_CHARS[Math.floor(Math.random()*CFG.RAIN_CHARS.length)];
+      col.char  = rndChar();
       col.y    += fs * col.speed;
       if (col.y > H + fs) col.y = -fs;
-      const lum = 15 + Math.floor(Math.random() * 40);
-      rCtx.fillStyle = `hsl(140,78%,${lum}%)`;
+      const lum = 14 + Math.floor(Math.random() * 38);
+      rCtx.fillStyle = `hsl(140,80%,${lum}%)`;
       rCtx.fillText(col.char, col.x, col.y);
     }
   }
 }
 
-// ── Draw particles ───────────────────────────────────────────
-function drawParticles(now, dt) {
-  pCtx.clearRect(0, 0, W, H);
-  pCtx.globalCompositeOperation = 'screen';  // additive glow
+// ══════════════════════════════════════════════════════════
+//  THREE.JS LAYER
+// ══════════════════════════════════════════════════════════
+let renderer, scene, camera, points, shieldGroup;
+let posAttr, colAttr;
+let targetPos, startPos, lerpPos;
+let sortOrder;         // particle index sorted top-Y first
+let flickerScale;      // per-particle flicker multiplier
+let baseColors;        // baked vertex colors (no flicker)
+let particleCount = 0;
 
-  const gs = CFG.GLOW_RADIUS * 2 + 2;
-  let allSettled = true;
-  phaseT += dt;
+// State machine
+const STATE = { ASSEMBLING:0, IDLE:1, DISPERSING:2 };
+let state = STATE.ASSEMBLING;
+let stateStart = 0;   // ms
 
-  for (const p of particles) {
+// Mouse parallax
+let mouseNX = 0, mouseNY = 0; // normalised −1..1
+let camBaseX = 0, camBaseY = 0;
 
-    // ── FALLING ──
-    if (phase === PH.FALLING) {
-      const active = phaseT - p.delay;
-      if (active < 0) { allSettled = false; continue; }
+// ── Easing ────────────────────────────────────────────────
+function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 
-      if (!p.settled) {
-        allSettled = false;
-        p.y    += p.vy * dt;
-        p.x    += (p.tx - p.x) * dt * 7;
-        p.alpha = Math.min(1, active * 2.5);
-        if (p.y >= p.ty) { p.y = p.ty; p.settled = true; }
+// ── Glow sprite texture ───────────────────────────────────
+function buildGlowTexture() {
+  const sz = 64;
+  const oc  = document.createElement('canvas');
+  oc.width  = oc.height = sz;
+  const ox  = oc.getContext('2d');
+  const g   = ox.createRadialGradient(sz/2, sz/2, 0, sz/2, sz/2, sz/2);
+  const cc  = CFG.CORE_COLOR;
+  const mc  = CFG.MID_COLOR;
+  g.addColorStop(0,   `rgba(${(cc[0]*255)|0},${(cc[1]*255)|0},${(cc[2]*255)|0},1)`);
+  g.addColorStop(0.35,`rgba(${(mc[0]*255)|0},${(mc[1]*255)|0},${(mc[2]*255)|0},0.9)`);
+  g.addColorStop(1,   'rgba(0,0,0,0)');
+  ox.fillStyle = g;
+  ox.fillRect(0, 0, sz, sz);
+  return new THREE.CanvasTexture(oc);
+}
 
-        // comet tail (2 dots above)
-        for (let t = 1; t <= 2; t++) {
-          pCtx.globalAlpha = p.alpha * (0.28 - t * 0.09);
-          pCtx.drawImage(glowSprite, p.x - gs/2, p.y - t*9 - gs/2, gs, gs);
-        }
-      }
-      pCtx.globalAlpha = p.alpha;
-      pCtx.drawImage(glowSprite, p.x - gs/2, p.y - gs/2, gs, gs);
+// ── Shield silhouette (clean heraldic path) ───────────────
+function buildShieldShape(sw, sh) {
+  const hw = sw / 2, hh = sh / 2;
+  const r  = sw * 0.12;
+  const shape = new THREE.Shape();
+  shape.moveTo(-hw + r, hh);
+  shape.lineTo( hw - r, hh);
+  shape.quadraticCurveTo( hw,  hh,  hw,  hh - r);
+  shape.lineTo( hw, -hh * 0.22);
+  shape.quadraticCurveTo( hw, -hh * 0.72,  0, -hh);
+  shape.quadraticCurveTo(-hw, -hh * 0.72, -hw, -hh * 0.22);
+  shape.lineTo(-hw,  hh - r);
+  shape.quadraticCurveTo(-hw,  hh, -hw + r,  hh);
+  return shape;
+}
 
-    // ── LOCKED / IDLE ──
-    } else if (phase === PH.LOCKED) {
-      p.fTimer -= dt;
-      if (p.fTimer <= 0) {
-        p.flicker = Math.random() < CFG.FLICKER_PROB * 60
-          ? 0.35 + Math.random() * 0.65
-          : 0.82 + Math.random() * 0.18;
-        p.fTimer  = 0.05 + Math.random() * 0.35;
-      }
-      const t  = now * 0.001;
-      const jx = Math.sin(t * p.jSx + p.jPh) * p.jAmp;
-      const jy = Math.cos(t * p.jSy + p.jPh) * p.jAmp * 0.7;
-      pCtx.globalAlpha = p.flicker;
-      pCtx.drawImage(glowSprite, (p.tx+jx) - gs/2, (p.ty+jy) - gs/2, gs, gs);
+// ── Sample surface points from ExtrudeGeometry ───────────
+function sampleSurface(geo, count) {
+  geo = geo.toNonIndexed(); // unroll so each triangle has unique verts
+  geo.computeVertexNormals();
 
-    // ── DISPERSING ──
-    } else if (phase === PH.DISPERSING) {
-      const prog = Math.min(1, phaseT / CFG.DISPERSE_DUR);
-      p.x += p.ux * dt;
-      p.y += p.uy * dt;
-      pCtx.globalAlpha = Math.max(0, 1 - prog * 1.4) * p.flicker;
-      pCtx.drawImage(glowSprite, p.x - gs/2, p.y - gs/2, gs, gs);
+  const pos    = geo.getAttribute('position');
+  const nor    = geo.getAttribute('normal');
+  const triCnt = pos.count / 3;
+
+  // Step 1 – compute triangle areas for importance sampling
+  const areas = new Float32Array(triCnt);
+  let total = 0;
+  const _v  = (a, i) => ({ x: a.getX(i), y: a.getY(i), z: a.getZ(i) });
+  const _cross = (ab, ac) => ({
+    x: ab.y*ac.z - ab.z*ac.y,
+    y: ab.z*ac.x - ab.x*ac.z,
+    z: ab.x*ac.y - ab.y*ac.x,
+  });
+
+  for (let t = 0; t < triCnt; t++) {
+    const A = _v(pos, t*3), B = _v(pos, t*3+1), C = _v(pos, t*3+2);
+    const ab = { x:B.x-A.x, y:B.y-A.y, z:B.z-A.z };
+    const ac = { x:C.x-A.x, y:C.y-A.y, z:C.z-A.z };
+    const cr = _cross(ab, ac);
+    const a  = 0.5 * Math.sqrt(cr.x*cr.x + cr.y*cr.y + cr.z*cr.z);
+    areas[t] = a;
+    total   += a;
+  }
+
+  // Step 2 – CDF
+  const cdf = new Float32Array(triCnt);
+  let cum = 0;
+  for (let t = 0; t < triCnt; t++) { cum += areas[t]/total; cdf[t] = cum; }
+
+  // Step 3 – sample
+  const positions = new Float32Array(count * 3);
+  const colors    = new Float32Array(count * 3);
+  const L = CFG.LIGHT_DIR;
+
+  function pickTri(r) {
+    let lo = 0, hi = triCnt - 1;
+    while (lo < hi) { const mid = (lo+hi)>>1; cdf[mid] < r ? lo=mid+1 : hi=mid; }
+    return lo;
+  }
+
+  for (let i = 0; i < count; i++) {
+    const t   = pickTri(Math.random());
+    const A   = _v(pos, t*3), B = _v(pos, t*3+1), C = _v(pos, t*3+2);
+    const NA  = _v(nor, t*3), NB = _v(nor, t*3+1), NC = _v(nor, t*3+2);
+    const r1  = Math.random(), r2 = Math.random();
+    const sr1 = Math.sqrt(r1);
+    const u = 1 - sr1, v = sr1*(1-r2), w = sr1*r2;
+
+    positions[i*3]   = u*A.x + v*B.x + w*C.x;
+    positions[i*3+1] = u*A.y + v*B.y + w*C.y;
+    positions[i*3+2] = u*A.z + v*B.z + w*C.z;
+
+    // Interpolated normal → diffuse lighting
+    const nx = u*NA.x + v*NB.x + w*NC.x;
+    const ny = u*NA.y + v*NB.y + w*NC.y;
+    const nz = u*NA.z + v*NB.z + w*NC.z;
+    const dot = Math.max(0, nx*L.x + ny*L.y + nz*L.z);
+    const bright = 0.22 + dot * 0.78; // ambient + diffuse
+
+    colors[i*3]   = CFG.CORE_COLOR[0] * bright;
+    colors[i*3+1] = CFG.CORE_COLOR[1] * bright;
+    colors[i*3+2] = CFG.CORE_COLOR[2] * bright;
+  }
+
+  return { positions, colors };
+}
+
+// ── Build / rebuild the entire 3-D scene ─────────────────
+function build3D(W, H) {
+  const isMobile  = W < 768;
+  particleCount   = isMobile
+    ? Math.floor(CFG.PARTICLE_COUNT_DESKTOP / 2)
+    : CFG.PARTICLE_COUNT_DESKTOP;
+
+  const sh  = CFG.SHIELD_HEIGHT;
+  const sw  = sh * CFG.SHIELD_W_H_RATIO;
+
+  // Dispose old objects
+  if (points) {
+    points.geometry.dispose();
+    points.material.dispose();
+    shieldGroup.remove(points);
+    scene.remove(shieldGroup);
+  }
+
+  // Shield geometry
+  const shape      = buildShieldShape(sw, sh);
+  const extrudeGeo = new THREE.ExtrudeGeometry(shape, {
+    depth         : CFG.EXTRUDE_DEPTH,
+    bevelEnabled  : true,
+    bevelThickness: CFG.BEVEL_THICK,
+    bevelSize     : CFG.BEVEL_SIZE,
+    bevelSegments : CFG.BEVEL_SEGS,
+  });
+  // Centre the extruded geometry on Z (depth centred)
+  extrudeGeo.translate(0, 0, -CFG.EXTRUDE_DEPTH / 2);
+
+  // Sample surface
+  const { positions: tPos, colors: tCol } = sampleSurface(extrudeGeo, particleCount);
+  extrudeGeo.dispose();
+
+  // Sort particles top→bottom for stagger
+  sortOrder = Array.from({ length: particleCount }, (_, i) => i)
+    .sort((a, b) => tPos[b*3+1] - tPos[a*3+1]);
+
+  // Target positions (in local space)
+  targetPos = tPos;
+  baseColors = tCol.slice(); // pristine copy for flicker reset
+
+  // Start positions: scattered above/around in local space
+  const spread = sh * 1.6;
+  startPos = new Float32Array(particleCount * 3);
+  for (let i = 0; i < particleCount; i++) {
+    startPos[i*3]   = (Math.random()-0.5) * spread * 2;
+    startPos[i*3+1] = sh * 0.5 + Math.random() * sh * 2.0; // above the shield
+    startPos[i*3+2] = (Math.random()-0.5) * spread;
+  }
+
+  // Lerp buffer (starts at startPos)
+  lerpPos = startPos.slice();
+
+  // Flicker multipliers
+  flickerScale = new Float32Array(particleCount).fill(1);
+
+  // BufferGeometry
+  const geo = new THREE.BufferGeometry();
+  posAttr   = new THREE.BufferAttribute(lerpPos.slice(), 3);
+  colAttr   = new THREE.BufferAttribute(tCol.slice(), 3);
+  posAttr.usage = THREE.DynamicDrawUsage;
+  colAttr.usage = THREE.DynamicDrawUsage;
+  geo.setAttribute('position', posAttr);
+  geo.setAttribute('color',    colAttr);
+
+  const mat = new THREE.PointsMaterial({
+    size         : isMobile ? CFG.PARTICLE_SIZE * 1.25 : CFG.PARTICLE_SIZE,
+    map          : buildGlowTexture(),
+    vertexColors : true,
+    transparent  : true,
+    blending     : THREE.AdditiveBlending,
+    depthWrite   : false,
+    sizeAttenuation: true,
+  });
+
+  points = new THREE.Points(geo, mat);
+  shieldGroup = new THREE.Group();
+  shieldGroup.add(points);
+  scene.add(shieldGroup);
+
+  // Camera distance so shield fills ~60% of viewport height
+  const halfFOV = (CFG.CAMERA_FOV * Math.PI / 180) / 2;
+  const camDist = (sh * 0.6) / Math.tan(halfFOV);
+  camBaseX = 0; camBaseY = 0;
+  camera.position.set(0, 0, camDist);
+  camera.lookAt(0, 0, 0);
+  camera.aspect = W / H;
+  camera.updateProjectionMatrix();
+
+  // Reset state
+  state      = STATE.ASSEMBLING;
+  stateStart = performance.now();
+}
+
+// ── Update particles each frame ───────────────────────────
+function updateParticles(now) {
+  const elapsed = (now - stateStart) / 1000;
+  const N = particleCount;
+  const pos = posAttr.array;
+
+  if (state === STATE.ASSEMBLING) {
+    const stagger = CFG.STAGGER_FRAC * CFG.ASSEMBLE_DUR;
+    const segDur  = CFG.ASSEMBLE_DUR - stagger;
+    let allDone   = true;
+
+    for (let rank = 0; rank < N; rank++) {
+      const i       = sortOrder[rank];
+      const delay   = (rank / N) * stagger;
+      const t       = easeOutCubic(Math.min(1, Math.max(0, (elapsed - delay) / segDur)));
+
+      pos[i*3]   = startPos[i*3]   + (targetPos[i*3]   - startPos[i*3])   * t;
+      pos[i*3+1] = startPos[i*3+1] + (targetPos[i*3+1] - startPos[i*3+1]) * t;
+      pos[i*3+2] = startPos[i*3+2] + (targetPos[i*3+2] - startPos[i*3+2]) * t;
+
+      if (t < 1) allDone = false;
     }
-  }
+    posAttr.needsUpdate = true;
 
-  pCtx.globalCompositeOperation = 'source-over';
-  pCtx.globalAlpha = 1;
+    if (allDone) { state = STATE.IDLE; stateStart = now; }
 
-  // ── Phase transitions ──
-  if (phase === PH.FALLING && allSettled) {
-    // Snapshot disperse positions
-    for (const p of particles) { p.x = p.tx; p.y = p.ty; }
-    phase = PH.LOCKED; phaseT = 0;
-  }
-  if (phase === PH.LOCKED && phaseT >= CFG.HOLD_DUR) {
-    phase = PH.DISPERSING; phaseT = 0;
-  }
-  if (phase === PH.DISPERSING && phaseT >= CFG.DISPERSE_DUR + 0.4) {
-    buildParticles(); // restart cycle
+  } else if (state === STATE.IDLE) {
+    // Slow Y rotation on the group
+    shieldGroup.rotation.y = elapsed * CFG.ROTATE_SPEED;
+
+    const t = now * 0.001;
+    const col = colAttr.array;
+
+    for (let i = 0; i < N; i++) {
+      // Tiny sine jitter
+      const ph = i * 1.618;
+      pos[i*3]   = targetPos[i*3]   + Math.sin(t*1.1 + ph) * CFG.JITTER_AMP;
+      pos[i*3+1] = targetPos[i*3+1] + Math.sin(t*0.9 + ph*1.3) * CFG.JITTER_AMP * 0.8;
+      pos[i*3+2] = targetPos[i*3+2] + Math.cos(t*1.0 + ph*0.7) * CFG.JITTER_AMP * 0.5;
+
+      // Flicker
+      if (Math.random() < CFG.FLICKER_PROB) {
+        flickerScale[i] = 0.3 + Math.random() * 0.7;
+      } else {
+        flickerScale[i] = Math.min(1, flickerScale[i] + 0.04);
+      }
+      const f = flickerScale[i];
+      col[i*3]   = baseColors[i*3]   * f;
+      col[i*3+1] = baseColors[i*3+1] * f;
+      col[i*3+2] = baseColors[i*3+2] * f;
+    }
+    posAttr.needsUpdate = true;
+    colAttr.needsUpdate = true;
+
+    if (elapsed >= CFG.HOLD_DUR) {
+      // Snapshot current particle positions for disperse
+      for (let i = 0; i < N; i++) {
+        startPos[i*3]   = pos[i*3];
+        startPos[i*3+1] = pos[i*3+1];
+        startPos[i*3+2] = pos[i*3+2];
+      }
+      state = STATE.DISPERSING; stateStart = now;
+    }
+
+  } else if (state === STATE.DISPERSING) {
+    const prog = Math.min(1, elapsed / CFG.DISPERSE_DUR);
+    const col  = colAttr.array;
+
+    for (let i = 0; i < N; i++) {
+      const t = prog;
+      // Drift outward/upward in world space (mix of random drift + upward)
+      const ph  = i * 0.73;
+      pos[i*3]   = startPos[i*3]   + Math.sin(ph) * t * 1.8;
+      pos[i*3+1] = startPos[i*3+1] + t * 3.0;
+      pos[i*3+2] = startPos[i*3+2] + Math.cos(ph) * t * 1.2;
+
+      // Fade out
+      const fade = Math.max(0, 1 - prog * 1.3);
+      col[i*3]   = baseColors[i*3]   * fade;
+      col[i*3+1] = baseColors[i*3+1] * fade;
+      col[i*3+2] = baseColors[i*3+2] * fade;
+    }
+    posAttr.needsUpdate = true;
+    colAttr.needsUpdate = true;
+
+    if (prog >= 1) {
+      // Reset for next loop
+      shieldGroup.rotation.y = 0;
+      const spread = CFG.SHIELD_HEIGHT * 1.6;
+      for (let i = 0; i < N; i++) {
+        startPos[i*3]   = (Math.random()-0.5) * spread * 2;
+        startPos[i*3+1] = CFG.SHIELD_HEIGHT * 0.5 + Math.random() * CFG.SHIELD_HEIGHT * 2;
+        startPos[i*3+2] = (Math.random()-0.5) * spread;
+        // Reset colors
+        col[i*3]   = baseColors[i*3];
+        col[i*3+1] = baseColors[i*3+1];
+        col[i*3+2] = baseColors[i*3+2];
+      }
+      colAttr.needsUpdate = true;
+      state = STATE.ASSEMBLING; stateStart = now;
+    }
   }
 }
 
-// ── Resize ───────────────────────────────────────────────────
+// ── Camera parallax ───────────────────────────────────────
+function updateCamera(W, H) {
+  camera.position.x = camBaseX + mouseNX * CFG.CAMERA_PARALLAX;
+  camera.position.y = camBaseY - mouseNY * CFG.CAMERA_PARALLAX * 0.6;
+  camera.lookAt(0, 0, 0);
+}
+
+// ══════════════════════════════════════════════════════════
+//  RESIZE
+// ══════════════════════════════════════════════════════════
+let W = 0, H = 0;
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+
 function resize() {
   W = window.innerWidth;
   H = window.innerHeight;
-  for (const [c, ctx] of [[rc, rCtx],[pc, pCtx]]) {
-    c.width  = Math.round(W * DPR);
-    c.height = Math.round(H * DPR);
-    c.style.width  = W + 'px';
-    c.style.height = H + 'px';
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+  // Rain canvas
+  rainCanvas.width  = W;
+  rainCanvas.height = H;
+  rainCanvas.style.width  = W + 'px';
+  rainCanvas.style.height = H + 'px';
+  initRain(W, H);
+
+  if (USE_3D && renderer) {
+    renderer.setSize(W, H);
+    camera.aspect = W / H;
+    camera.updateProjectionMatrix();
+    build3D(W, H);
   }
-  buildRain();
-  buildGlowSprite();
-  buildTargets();
-  buildParticles();
 }
 
 window.addEventListener('resize', resize);
 
-// ── Reduced motion: static shield, no animation ──────────────
-const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+// ══════════════════════════════════════════════════════════
+//  INIT THREE.JS
+// ══════════════════════════════════════════════════════════
+function init3D() {
+  const glCanvas = document.getElementById('gl');
 
-// ── Main loop ─────────────────────────────────────────────────
-let lastT = null;
-function loop(now) {
-  if (!lastT) lastT = now;
-  const dt = Math.min((now - lastT) / 1000, 0.05);
-  lastT = now;
-  drawRain(dt);
+  renderer = new THREE.WebGLRenderer({
+    canvas    : glCanvas,
+    alpha     : true,
+    antialias : false,
+    powerPreference: 'high-performance',
+  });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setClearColor(0x000000, 0);
 
-  if (reducedMotion) {
-    // Draw static formed shield
-    pCtx.clearRect(0, 0, W, H);
-    pCtx.globalCompositeOperation = 'screen';
-    const gs = CFG.GLOW_RADIUS * 2 + 2;
-    for (const t of targets) {
-      pCtx.globalAlpha = 0.9;
-      pCtx.drawImage(glowSprite, t.x - gs/2, t.y - gs/2, gs, gs);
-    }
-    pCtx.globalCompositeOperation = 'source-over';
-    pCtx.globalAlpha = 1;
-  } else {
-    drawParticles(now, dt);
-  }
+  scene  = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(CFG.CAMERA_FOV, W/H, 0.1, 100);
 
-  requestAnimationFrame(loop);
+  build3D(W, H);
+
+  // Mouse parallax listener
+  window.addEventListener('mousemove', (e) => {
+    mouseNX = (e.clientX / W) * 2 - 1;
+    mouseNY = (e.clientY / H) * 2 - 1;
+  });
 }
 
-// ── Init ──────────────────────────────────────────────────────
-resize();
-requestAnimationFrame(loop);
+// ══════════════════════════════════════════════════════════
+//  MAIN LOOP
+// ══════════════════════════════════════════════════════════
+let lastT  = null;
+let paused = false;
+let rafID  = null;
+
+function loop(now) {
+  rafID = requestAnimationFrame(loop);
+  if (paused) return;
+
+  if (!lastT) lastT = now;
+  const dt  = Math.min((now - lastT) / 1000, 0.05);
+  lastT = now;
+
+  drawRain(W, H, dt);
+
+  if (USE_3D && renderer) {
+    updateParticles(now);
+    updateCamera(W, H);
+    renderer.render(scene, camera);
+  }
+}
+
+// ── Pause on hidden tab ───────────────────────────────────
+document.addEventListener('visibilitychange', () => {
+  paused = document.hidden;
+  if (!paused) lastT = null;
+});
+
+// ── Pause when scrolled out of view ──────────────────────
+if ('IntersectionObserver' in window) {
+  const io = new IntersectionObserver((entries) => {
+    paused = !entries[0].isIntersecting;
+    if (!paused) lastT = null;
+  }, { threshold: 0 });
+  io.observe(document.getElementById('wrap'));
+}
+
+// ══════════════════════════════════════════════════════════
+//  STATIC FALLBACK (reduced-motion or no WebGL)
+// ══════════════════════════════════════════════════════════
+function staticFallback(W, H) {
+  // Draw the shield outline directly on the rain canvas with a glow effect
+  const gl = document.getElementById('gl');
+  gl.style.display = 'none';
+
+  const sh = H * 0.55, sw = sh * CFG.SHIELD_W_H_RATIO;
+  const cx = W / 2, cy = H / 2 + H * 0.02;
+
+  function drawStatic() {
+    rCtx.save();
+    const p = new Path2D();
+    const hw = sw/2, hh = sh/2, r = sw*0.12;
+    p.moveTo(cx-hw+r, cy-hh);
+    p.lineTo(cx+hw-r, cy-hh);
+    p.quadraticCurveTo(cx+hw, cy-hh, cx+hw, cy-hh+r);
+    p.lineTo(cx+hw, cy-hh*0.22+cy);
+    // right curve to point — adjust for offset
+    p.lineTo(cx+hw, cy+hh*0.22);
+    p.quadraticCurveTo(cx+hw, cy+hh*0.72, cx, cy+hh);
+    p.quadraticCurveTo(cx-hw, cy+hh*0.72, cx-hw, cy+hh*0.22);
+    p.lineTo(cx-hw, cy-hh+r);
+    p.quadraticCurveTo(cx-hw, cy-hh, cx-hw+r, cy-hh);
+    p.closePath();
+
+    rCtx.shadowColor = '#00ff66';
+    rCtx.shadowBlur  = 20;
+    rCtx.strokeStyle = '#39ff88';
+    rCtx.lineWidth   = 2;
+    rCtx.stroke(p);
+    rCtx.restore();
+  }
+
+  // Draw once on top of rain each frame
+  const origDraw = drawRain.bind(null, W, H);
+  let ltS = null;
+  function staticLoop(now) {
+    requestAnimationFrame(staticLoop);
+    if (!ltS) ltS = now;
+    const dt = Math.min((now-ltS)/1000, 0.05); ltS=now;
+    origDraw(dt);
+    drawStatic();
+  }
+  requestAnimationFrame(staticLoop);
+}
+
+// ══════════════════════════════════════════════════════════
+//  BOOT
+// ══════════════════════════════════════════════════════════
+W = window.innerWidth;
+H = window.innerHeight;
+
+rainCanvas.width  = W; rainCanvas.height = H;
+rainCanvas.style.width  = W+'px'; rainCanvas.style.height = H+'px';
+initRain(W, H);
+
+if (USE_3D) {
+  const glC = document.getElementById('gl');
+  glC.style.width  = W + 'px';
+  glC.style.height = H + 'px';
+  init3D();
+  requestAnimationFrame(loop);
+} else {
+  staticFallback(W, H);
+}
 </script>
 </body>
 </html>
