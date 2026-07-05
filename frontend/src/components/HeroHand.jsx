@@ -1,69 +1,80 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
-// Joint positions for a right hand (normalized, palm facing viewer)
-// Each entry: [x, y, z]  — roughly -1..1 range, scaled later
-const JOINTS = {
-  // Wrist
-  wrist:   [0, -1.6, 0],
+// ── Build a particle cloud that forms a hand shape ──────────────────────────
+// We generate points that lie inside a hand-shaped volume by:
+// 1. Defining the hand as a union of capsule volumes (palm + 5 fingers)
+// 2. Rejection-sampling random points until we fill the hand
+function inCapsule(px, py, pz, ax, ay, az, bx, by, bz, r) {
+  const abx = bx - ax, aby = by - ay, abz = bz - az;
+  const apx = px - ax, apy = py - ay, apz = pz - az;
+  const len2 = abx * abx + aby * aby + abz * abz;
+  const t = Math.max(0, Math.min(1, (apx * abx + apy * aby + apz * abz) / len2));
+  const dx = px - (ax + t * abx);
+  const dy = py - (ay + t * aby);
+  const dz = pz - (az + t * abz);
+  return dx * dx + dy * dy + dz * dz < r * r;
+}
 
-  // Thumb
-  thumb0:  [-0.55, -1.1, 0.1],
-  thumb1:  [-0.85, -0.7, 0.15],
-  thumb2:  [-1.0,  -0.3, 0.1],
-  thumb3:  [-1.05,  0.1, 0.05],
+// Capsule segments for a right hand (in local space, palm up)
+// Format: [ax,ay,az,  bx,by,bz,  radius]
+const CAPS = [
+  // Palm (wide short box approximated by overlapping capsules)
+  [-0.35, -0.6, 0,   0.35, -0.6, 0,   0.38],  // palm base
+  [-0.30, -0.2, 0,   0.30, -0.2, 0,   0.36],  // palm mid
+  [-0.28,  0.1, 0,   0.28,  0.1, 0,   0.32],  // palm top
 
-  // Index
-  index0:  [-0.42, -0.6, 0],
-  index1:  [-0.5,   0.1, 0],
-  index2:  [-0.5,   0.65, 0],
-  index3:  [-0.48,  1.1, 0],
-  index4:  [-0.46,  1.45, 0],
+  // Thumb (angled left)
+  [-0.35, -0.4, 0.05,  -0.60, -0.0, 0.1,  0.15],
+  [-0.60, -0.0, 0.1,   -0.78,  0.3, 0.08, 0.13],
+  [-0.78,  0.3, 0.08,  -0.88,  0.55, 0.06, 0.10],
 
-  // Middle
-  mid0:    [-0.1, -0.55, 0],
-  mid1:    [-0.1,  0.15, 0],
-  mid2:    [-0.1,  0.75, 0],
-  mid3:    [-0.08, 1.22, 0],
-  mid4:    [-0.06, 1.6, 0],
+  // Index finger
+  [-0.30,  0.1, 0,   -0.32,  0.6, 0,   0.12],
+  [-0.32,  0.6, 0,   -0.32,  1.1, 0,   0.11],
+  [-0.32,  1.1, 0,   -0.30,  1.5, 0,   0.09],
 
-  // Ring
-  ring0:   [0.24, -0.58, 0],
-  ring1:   [0.26,  0.1, 0],
-  ring2:   [0.27,  0.68, 0],
-  ring3:   [0.27,  1.14, 0],
-  ring4:   [0.26,  1.48, 0],
+  // Middle finger (tallest)
+  [-0.06,  0.1, 0,   -0.06,  0.65, 0,  0.12],
+  [-0.06,  0.65, 0,  [-0.06,  1.2, 0], 0.11],  // dummy — fix below
+  [-0.06,  1.2, 0,   -0.04,  1.65, 0,  0.09],
 
-  // Pinky
-  pinky0:  [0.55, -0.65, 0],
-  pinky1:  [0.6,  -0.05, 0],
-  pinky2:  [0.62,  0.4, 0],
-  pinky3:  [0.62,  0.75, 0],
-  pinky4:  [0.61,  1.0, 0],
-};
+  // Ring finger
+  [ 0.20,  0.1, 0,   0.22,  0.6, 0,   0.11],
+  [ 0.22,  0.6, 0,   0.22,  1.1, 0,   0.10],
+  [ 0.22,  1.1, 0,   0.20,  1.45, 0,  0.09],
 
-// Bone connections: pairs of joint keys
-const BONES = [
-  // Wrist → knuckles
-  ['wrist', 'thumb0'],
-  ['wrist', 'index0'],
-  ['wrist', 'mid0'],
-  ['wrist', 'ring0'],
-  ['wrist', 'pinky0'],
-  // Palm cross-bar
-  ['index0','mid0'], ['mid0','ring0'], ['ring0','pinky0'],
-  // Thumb chain
-  ['thumb0','thumb1'], ['thumb1','thumb2'], ['thumb2','thumb3'],
-  // Index chain
-  ['index0','index1'], ['index1','index2'], ['index2','index3'], ['index3','index4'],
-  // Middle chain
-  ['mid0','mid1'],['mid1','mid2'],['mid2','mid3'],['mid3','mid4'],
-  // Ring chain
-  ['ring0','ring1'],['ring1','ring2'],['ring2','ring3'],['ring3','ring4'],
-  // Pinky chain
-  ['pinky0','pinky1'],['pinky1','pinky2'],['pinky2','pinky3'],['pinky3','pinky4'],
+  // Pinky (shorter)
+  [ 0.44,  0.0, 0,   0.47,  0.45, 0,  0.10],
+  [ 0.47,  0.45, 0,  0.47,  0.80, 0,  0.09],
+  [ 0.47,  0.80, 0,  0.45,  1.05, 0,  0.08],
 ];
 
+// Fix the broken entry above
+CAPS[10] = [-0.06, 0.65, 0, -0.06, 1.2, 0, 0.11];
+
+function inHand(px, py, pz) {
+  for (const c of CAPS) {
+    if (inCapsule(px, py, pz, c[0], c[1], c[2], c[3], c[4], c[5], c[6])) return true;
+  }
+  return false;
+}
+
+function buildHandPoints(count) {
+  const pts = [];
+  const BX = 1.1, BY = 1.85, BZ = 0.3;
+  while (pts.length < count * 3) {
+    const x = (Math.random() * 2 - 1) * BX;
+    const y = (Math.random() * 2 - 1) * BY * 0.5 + 0.4; // bias upward
+    const z = (Math.random() * 2 - 1) * BZ;
+    if (inHand(x, y, z)) {
+      pts.push(x, y, z);
+    }
+  }
+  return new Float32Array(pts);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 export default function HeroHand() {
   const containerRef = useRef(null);
 
@@ -71,13 +82,12 @@ export default function HeroHand() {
     const el = containerRef.current;
     if (!el) return;
 
-    const W = el.clientWidth  || 340;
-    const H = el.clientHeight || 380;
+    const W = el.clientWidth || 380;
+    const H = el.clientHeight || 420;
 
-    // ── Scene ──
-    const scene    = new THREE.Scene();
-    const camera   = new THREE.PerspectiveCamera(40, W / H, 0.1, 100);
-    camera.position.set(0, 0, 9);
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(38, W / H, 0.1, 100);
+    camera.position.set(0, 0.4, 8);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(W, H);
@@ -85,94 +95,83 @@ export default function HeroHand() {
     el.appendChild(renderer.domElement);
 
     const group = new THREE.Group();
-    // Scale & slight tilt so hand fills the canvas nicely
-    group.scale.setScalar(1.7);
-    group.rotation.z = -0.18; // tiny clockwise lean
+    group.scale.setScalar(1.55);
     scene.add(group);
 
-    // ── Helper: vec3 from joint key ──
-    const v3 = (key) => {
-      const [x, y, z] = JOINTS[key];
-      return new THREE.Vector3(x, y, z);
-    };
+    // ── 1. Main particle cloud (the hand shape) ──
+    const N = 4500;
+    const positions = buildHandPoints(N);
 
-    const GREEN = 0x00ff66;
-
-    // ── 1. Glow nodes at every joint ──
-    const nodeMat = new THREE.MeshBasicMaterial({ color: GREEN });
-    Object.values(JOINTS).forEach(([x, y, z]) => {
-      const size = 0.055 + Math.random() * 0.025;
-      const mesh = new THREE.Mesh(new THREE.SphereGeometry(size, 8, 8), nodeMat);
-      mesh.position.set(x, y, z);
-      group.add(mesh);
-    });
-
-    // ── 2. Bone lines ──
-    const lineMat = new THREE.LineBasicMaterial({
-      color: GREEN,
-      transparent: true,
-      opacity: 0.65,
-    });
-
-    BONES.forEach(([a, b]) => {
-      const geo = new THREE.BufferGeometry().setFromPoints([v3(a), v3(b)]);
-      group.add(new THREE.Line(geo, lineMat));
-    });
-
-    // ── 3. Halo glow ring around palm ──
-    const haloMat = new THREE.LineBasicMaterial({
-      color: GREEN,
-      transparent: true,
-      opacity: 0.12,
-    });
-    const haloGeo = new THREE.RingGeometry(0.85, 0.88, 64);
-    group.add(new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints(
-        Array.from({ length: 65 }, (_, i) => {
-          const a = (i / 64) * Math.PI * 2;
-          return new THREE.Vector3(Math.cos(a) * 0.86, Math.sin(a) * 0.86 - 0.2, 0);
-        })
-      ),
-      haloMat
-    ));
-
-    // ── 4. Floating particles around the hand ──
-    const pCount = 80;
-    const pPos   = new Float32Array(pCount * 3);
-    const pSpeeds = [];
-    for (let i = 0; i < pCount; i++) {
-      pPos[i * 3]     = (Math.random() - 0.5) * 2.6;
-      pPos[i * 3 + 1] = (Math.random() - 0.5) * 3.8;
-      pPos[i * 3 + 2] = (Math.random() - 0.5) * 0.5;
-      pSpeeds.push(0.004 + Math.random() * 0.008);
+    // Assign per-particle brightness based on Y (top = brighter like a light from above)
+    const colors = new Float32Array(N * 3);
+    for (let i = 0; i < N; i++) {
+      const y = positions[i * 3 + 1];
+      // spotlight: brighter near top-centre
+      const x = positions[i * 3];
+      const dist = Math.sqrt(x * x + (y - 1.5) * (y - 1.5));
+      const bright = Math.max(0.2, 1.0 - dist * 0.38);
+      colors[i * 3]     = 0 * bright;        // R
+      colors[i * 3 + 1] = bright;             // G  (full green)
+      colors[i * 3 + 2] = bright * 0.35;      // B  (slight cyan tint at bright spots)
     }
-    const pGeo = new THREE.BufferGeometry();
-    pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
-    const pMat = new THREE.PointsMaterial({
-      color: GREEN, size: 0.04, transparent: true, opacity: 0.55,
-    });
-    const particles = new THREE.Points(pGeo, pMat);
-    group.add(particles);
 
-    // ── 5. Digit rain — tiny vertical columns of numbers ──
-    // (rendered as a 2-D canvas texture on a plane behind the hand)
-    const rainCanvas = document.createElement('canvas');
-    rainCanvas.width  = 256;
-    rainCanvas.height = 512;
-    const rCtx = rainCanvas.getContext('2d');
-    const rainTex = new THREE.CanvasTexture(rainCanvas);
-    const rainMat = new THREE.MeshBasicMaterial({
-      map: rainTex, transparent: true, opacity: 0.18, depthWrite: false,
-    });
-    const rainMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 6.8), rainMat);
-    rainMesh.position.z = -0.3;
-    group.add(rainMesh);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('color',    new THREE.BufferAttribute(colors, 3));
 
-    const rainDrops = Array.from({ length: 22 }, () => ({
-      x: Math.random() * 256,
-      y: Math.random() * 512,
-      speed: 1.5 + Math.random() * 3,
-    }));
+    const mat = new THREE.PointsMaterial({
+      size: 0.045,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.92,
+      sizeAttenuation: true,
+    });
+
+    const hand = new THREE.Points(geo, mat);
+    group.add(hand);
+
+    // ── 2. Ambient scatter particles (tiny floating sparks around the hand) ──
+    const sN = 250;
+    const sPos = new Float32Array(sN * 3);
+    const sSpeeds = [];
+    for (let i = 0; i < sN; i++) {
+      sPos[i * 3]     = (Math.random() - 0.5) * 2.4;
+      sPos[i * 3 + 1] = (Math.random() - 0.5) * 4.0;
+      sPos[i * 3 + 2] = (Math.random() - 0.5) * 0.6;
+      sSpeeds.push(0.003 + Math.random() * 0.006);
+    }
+    const sGeo = new THREE.BufferGeometry();
+    sGeo.setAttribute('position', new THREE.BufferAttribute(sPos, 3));
+    const sMat = new THREE.PointsMaterial({
+      color: 0x00ff66, size: 0.035, transparent: true, opacity: 0.4,
+    });
+    const sparks = new THREE.Points(sGeo, sMat);
+    group.add(sparks);
+
+    // ── 3. Green spotlight beam from top ──
+    // Rendered as a vertical semi-transparent cone of lines
+    const beamCount = 18;
+    for (let i = 0; i < beamCount; i++) {
+      const angle = (i / beamCount) * Math.PI * 0.35 - Math.PI * 0.175;
+      const bGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(Math.sin(angle) * 0.12, 2.6, 0),
+        new THREE.Vector3(Math.sin(angle) * 0.9, -0.8, 0),
+      ]);
+      const bMat = new THREE.LineBasicMaterial({
+        color: 0x00ff66, transparent: true, opacity: 0.04 + Math.random() * 0.04,
+      });
+      group.add(new THREE.Line(bGeo, bMat));
+    }
+
+    // ── 4. Glowing halo ring at palm level ──
+    const hPts = [];
+    for (let i = 0; i <= 80; i++) {
+      const a = (i / 80) * Math.PI * 2;
+      hPts.push(new THREE.Vector3(Math.cos(a) * 0.72, Math.sin(a) * 0.24 - 0.25, 0));
+    }
+    const hGeo = new THREE.BufferGeometry().setFromPoints(hPts);
+    const hMat = new THREE.LineBasicMaterial({ color: 0x00ff66, transparent: true, opacity: 0.18 });
+    group.add(new THREE.Line(hGeo, hMat));
 
     // ── Mouse parallax ──
     let tx = 0, ty = 0, mx = 0, my = 0;
@@ -191,37 +190,29 @@ export default function HeroHand() {
       raf = requestAnimationFrame(animate);
       const t = clock.getElapsedTime();
 
-      // Gentle floating breath
-      group.position.y = Math.sin(t * 0.6) * 0.06;
+      // Gentle float / breathe
+      group.position.y = Math.sin(t * 0.55) * 0.05;
+      group.rotation.z = Math.sin(t * 0.25) * 0.04;
 
-      // Slow idle rotation
-      group.rotation.y = Math.sin(t * 0.3) * 0.2;
+      // Slow y-rotation idle
+      group.rotation.y = Math.sin(t * 0.2) * 0.15;
 
       // Mouse parallax
-      mx += (tx - mx) * 0.06;
-      my += (ty - my) * 0.06;
-      group.rotation.x = -my * 0.18;
-      group.rotation.y += mx * 0.06;
+      mx += (tx - mx) * 0.05;
+      my += (ty - my) * 0.05;
+      group.rotation.y += mx * 0.07;
+      group.rotation.x  = -my * 0.12;
 
-      // Particle float upward
-      const pa = pGeo.getAttribute('position');
-      for (let i = 0; i < pCount; i++) {
-        pa.array[i * 3 + 1] += pSpeeds[i];
-        if (pa.array[i * 3 + 1] > 2.2) pa.array[i * 3 + 1] = -2.2;
+      // Sparks drift upward
+      const sa = sGeo.getAttribute('position');
+      for (let i = 0; i < sN; i++) {
+        sa.array[i * 3 + 1] += sSpeeds[i];
+        if (sa.array[i * 3 + 1] > 2.5) sa.array[i * 3 + 1] = -2.5;
       }
-      pa.needsUpdate = true;
+      sa.needsUpdate = true;
 
-      // Rain canvas update
-      rCtx.fillStyle = 'rgba(0,0,0,0.25)';
-      rCtx.fillRect(0, 0, 256, 512);
-      rCtx.font = '11px monospace';
-      rainDrops.forEach((d) => {
-        rCtx.fillStyle = `rgba(0,255,102,${0.4 + Math.random() * 0.6})`;
-        rCtx.fillText(Math.floor(Math.random() * 10), d.x, d.y);
-        d.y += d.speed;
-        if (d.y > 512) d.y = 0;
-      });
-      rainTex.needsUpdate = true;
+      // Pulse particle opacity
+      mat.opacity = 0.88 + Math.sin(t * 1.4) * 0.07;
 
       renderer.render(scene, camera);
     };
@@ -242,6 +233,8 @@ export default function HeroHand() {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('resize', onResize);
       if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement);
+      geo.dispose(); mat.dispose();
+      sGeo.dispose(); sMat.dispose();
       renderer.dispose();
     };
   }, []);
@@ -249,7 +242,7 @@ export default function HeroHand() {
   return (
     <div
       ref={containerRef}
-      className="w-full h-[280px] sm:h-[400px] flex items-center justify-center relative overflow-hidden"
+      className="w-full h-[300px] sm:h-[440px] flex items-center justify-center relative overflow-hidden"
     />
   );
 }
