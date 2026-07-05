@@ -71,11 +71,14 @@ export default function EmailCheck({ onScanComplete }) {
       `}} />
 
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold font-mono tracking-wide text-cyan-400 uppercase">
-          SUSPICIOUS EMAIL SCRUTINIZER
+        <span className="text-[9px] font-mono-tech text-[#00ff66] tracking-widest uppercase block mb-1">
+          [ CONTENT AUDIT SERVICE ]
+        </span>
+        <h2 className="text-2xl font-bold font-sans tracking-wide text-slate-200 uppercase">
+          Email Spoof Scrutinizer
         </h2>
-        <p className="text-xs text-slate-500 font-mono mt-1">
-          PARSES HEADERS, DETECTS DISPLAY-NAME SPOOFING, TYPOSQUAT DOMAINS, AND IDENTIFIES ZERO-PAYLOAD LLM ATTACKS
+        <p className="text-xs text-slate-500 font-mono-tech mt-1 uppercase">
+          Parses headers, detects display-name spoofing, typosquats, and audits zero-payload LLM vectors
         </p>
       </div>
 
@@ -84,18 +87,18 @@ export default function EmailCheck({ onScanComplete }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
         {/* Left column: Paste Area */}
-        <div className="glass rounded-xl p-6 border border-slate-800 flex flex-col">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-            <span className="text-[10px] font-mono tracking-widest text-slate-400">
-              EMAIL_RAW_INPUT.TXT
+        <div className="glass rounded-2xl p-6 border border-slate-900/60 flex flex-col relative overflow-hidden">
+          <div className="flex items-center justify-between border-b border-slate-900 pb-3 mb-4">
+            <span className="text-[10px] font-mono-tech text-[#00ff66] font-bold">
+              [ 2.0 ]
             </span>
             <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-500" />
-              <span className="text-[10px] font-mono text-cyan-500">READY</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#00ff66]" />
+              <span className="text-[10px] font-mono-tech text-[#00ff66] uppercase">READY</span>
             </div>
           </div>
 
-          <div className="relative overflow-hidden rounded-lg border border-slate-800 bg-slate-950 mb-4 h-72">
+          <div className="relative overflow-hidden rounded-xl border border-slate-900 bg-[#030605] mb-4 h-72">
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
@@ -106,26 +109,26 @@ Subject: Action Required: Claim your Ticket Refund
 
 Dear Fan, please reply to this email immediately...`}
               disabled={isScanning}
-              className="w-full h-full p-4 bg-transparent text-slate-200 font-mono text-xs placeholder-slate-700 focus:outline-none focus:border-cyan-500/50 resize-none leading-relaxed select-text"
+              className="w-full h-full p-4 bg-transparent text-slate-200 font-mono-tech text-xs placeholder-slate-700 focus:outline-none focus:border-[#00ff66]/30 resize-none leading-relaxed select-text"
             />
             {/* Micro-interaction: Laser Scanning Line Sweep */}
             {isScanning && (
-              <div className="absolute top-0 left-0 w-full h-1 bg-cyan-400 shadow-[0_0_12px_#22d3ee] opacity-80 animate-scan-sweep-input pointer-events-none" />
+              <div className="absolute top-0 left-0 w-full h-1 bg-[#00ff66] shadow-[0_0_12px_rgba(0,255,102,0.8)] opacity-80 animate-scan-sweep-input pointer-events-none" />
             )}
           </div>
 
           <button
             onClick={handleAnalyze}
             disabled={isScanning || !content.trim()}
-            className="w-full bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-bold font-mono tracking-wider py-3 rounded-lg transition-all duration-200 uppercase flex items-center justify-center gap-2"
+            className="w-full border border-[#00ff66]/40 hover:bg-[#00ff66]/10 text-slate-200 hover:text-white font-bold font-mono-tech tracking-wider py-3 rounded-full transition-all duration-300 uppercase flex items-center justify-center gap-2 cursor-pointer text-xs"
           >
             {isScanning ? (
               <>
-                <svg className="animate-spin h-4 w-4 text-slate-950" viewBox="0 0 24 24" fill="none">
+                <svg className="animate-spin h-4 w-4 text-[#00ff66]" viewBox="0 0 24 24" fill="none">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
-                Executing AI Scrutiny...
+                RUNNING CONTENT CLASSIFIER...
               </>
             ) : (
               'Analyze Email Content'
@@ -136,25 +139,24 @@ Dear Fan, please reply to this email immediately...`}
         {/* Right column: Results Readout */}
         <div className="flex flex-col items-center justify-center min-h-[300px]">
           {status === 'idle' && !content.trim() && (
-            <div className="text-center p-8 glass border-slate-800 rounded-xl w-full border text-slate-500 font-mono text-sm leading-relaxed">
+            <div className="text-center p-8 glass border-slate-900/60 rounded-2xl w-full border text-slate-500 font-mono-tech text-xs tracking-wider leading-relaxed">
               [SYSTEM STANDBY]<br />
-              AWAITING CONTENT PASTE...
+              AWAITING CONTENT DEPLOYMENT...
             </div>
           )}
 
           {status === 'idle' && content.trim() && (
-            <div className="text-center p-8 glass border-cyan-500/20 rounded-xl w-full border text-cyan-400 font-mono text-sm leading-relaxed">
+            <div className="text-center p-8 glass border-[#00ff66]/20 rounded-2xl w-full border text-[#00ff66] font-mono-tech text-xs tracking-wider leading-relaxed animate-pulse">
               [CONTENT DETECTED]<br />
-              CLICK 'ANALYZE EMAIL CONTENT' TO INITIATE AI PARSE SEQUENCE
+              CLICK 'ANALYZE EMAIL CONTENT' TO AUDIT INPUT
             </div>
           )}
 
           {isScanning && (
-            <div className="w-full glass border-slate-800 rounded-xl p-8 border flex flex-col items-center justify-center">
-              {/* Spinner */}
-              <div className="w-12 h-12 rounded-full border-4 border-cyan-900 border-t-cyan-400 animate-spin mb-4" />
-              <div className="text-center font-mono text-xs text-slate-400 space-y-1">
-                <p className="text-cyan-400 font-bold uppercase tracking-widest">
+            <div className="w-full glass border-slate-900/60 rounded-2xl p-8 border flex flex-col items-center justify-center">
+              <div className="w-12 h-12 rounded-full border-4 border-[#00ff66]/10 border-t-[#00ff66] animate-spin mb-4" />
+              <div className="text-center font-mono-tech text-[10px] text-slate-400 space-y-1 tracking-wider">
+                <p className="text-[#00ff66] font-bold uppercase tracking-widest">
                   RUNNING CONTENT DETECTOR LOGIC
                 </p>
                 {currentStep === 0 && <p className="text-slate-500 animate-pulse">[0/4] EXTRACTING HEADER BLOCKS & BODY...</p>}
@@ -166,21 +168,21 @@ Dear Fan, please reply to this email immediately...`}
           )}
 
           {status === 'error' && (
-            <div className="w-full glass border-red-500/30 rounded-xl p-6 border text-left">
+            <div className="w-full glass border-red-500/30 rounded-2xl p-6 border text-left">
               <div className="flex items-center gap-2.5 text-red-400 border-b border-red-950 pb-2 mb-4">
                 <span className="text-lg">⚠️</span>
-                <span className="text-xs font-mono font-bold tracking-widest uppercase">
-                  PROCESS FAILURE REPORT
+                <span className="text-xs font-mono-tech font-bold tracking-widest uppercase">
+                  PROCESS EXCEPTION REPORT
                 </span>
               </div>
-              <p className="font-mono text-xs text-red-300 leading-relaxed bg-red-950/40 border border-red-900/30 rounded p-3 select-text">
+              <p className="font-mono-tech text-xs text-red-300 leading-relaxed bg-red-950/40 border border-red-900/30 rounded-lg p-3 select-text">
                 {errorMsg}
               </p>
               <button
                 onClick={handleAnalyze}
-                className="mt-4 text-xs font-mono text-cyan-400 hover:text-cyan-300 underline block"
+                className="mt-4 text-xs font-mono-tech text-[#00ff66] hover:underline block cursor-pointer"
               >
-                RE-RUN EVALUATION
+                RE-RUN EVALUATION SIGNAL
               </button>
             </div>
           )}

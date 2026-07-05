@@ -7,10 +7,10 @@ import './App.css';
 export default function App() {
   const [booting, setBooting] = useState(true);
   const [bootLogs, setBootLogs] = useState([]);
-  const [activeTab, setActiveTab] = useState('qr'); // qr | email
+  const [activeTab, setActiveTab] = useState('home'); // home | qr | email
   const [currentRiskScore, setCurrentRiskScore] = useState(0);
 
-  // Terminal boot log sequence simulation (~1.5s)
+  // Terminal boot logs simulation (~1.5s)
   useEffect(() => {
     if (!booting) return;
 
@@ -38,7 +38,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, [booting]);
 
-  // Handle risk results from child pages to update global overlay styles
   const handleScanComplete = (result) => {
     if (!result) {
       setCurrentRiskScore(0);
@@ -47,7 +46,7 @@ export default function App() {
     }
   };
 
-  // Determine state styling classes based on the risk score
+  // Determine threat-pulse alert states
   let globalAlertClass = "";
   let isAlertActive = false;
 
@@ -57,34 +56,32 @@ export default function App() {
   } else if (currentRiskScore >= 25) {
     globalAlertClass = "border-amber-500/40 shadow-[inset_0_0_30px_rgba(245,158,11,0.15)] ring-1 ring-amber-500/10";
   } else if (currentRiskScore > 0) {
-    globalAlertClass = "border-[#00ff9d]/30 shadow-[inset_0_0_20px_rgba(0,255,157,0.08)]";
+    globalAlertClass = "border-[#00ff66]/30 shadow-[inset_0_0_20px_rgba(0,255,102,0.08)]";
   }
 
   if (booting) {
     return (
-      <div className="bg-[#05070A] text-slate-200 min-h-screen flex flex-col justify-center items-center p-6 relative font-mono select-none">
-        {/* Scanline element */}
+      <div className="bg-[#030605] text-slate-200 min-h-screen flex flex-col justify-center items-center p-6 relative font-mono select-none">
         <div className="scanlines" />
         
-        <div className="max-w-xl w-full border border-cyan-500/20 bg-slate-950 p-6 rounded-lg shadow-[0_0_30px_rgba(6,182,212,0.15)] flex flex-col relative">
+        <div className="max-w-xl w-full border border-[#00ff66]/20 bg-[#040a08] p-6 rounded-lg shadow-[0_0_30px_rgba(0,255,102,0.12)] flex flex-col relative">
           <div className="flex items-center justify-between border-b border-slate-900 pb-3 mb-4">
-            <span className="text-[10px] tracking-widest text-cyan-400 font-bold uppercase">
+            <span className="text-[10px] tracking-widest text-[#00ff66] font-bold uppercase">
               BOOT_SEQUENCE.SH
             </span>
-            <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#00ff66] animate-ping" />
           </div>
 
-          {/* Terminal log panel */}
-          <div className="h-64 overflow-y-auto text-xs text-cyan-500/90 leading-6 font-mono-tech select-text">
+          <div className="h-64 overflow-y-auto text-xs text-[#00ff66]/90 leading-6 font-mono-tech select-text">
             {bootLogs.map((log, idx) => (
               <div key={idx}>{log}</div>
             ))}
-            <div className="w-2 h-4 bg-cyan-400 inline-block animate-pulse ml-1" />
+            <div className="w-2 h-4 bg-[#00ff66] inline-block animate-pulse ml-1" />
           </div>
 
           <button
             onClick={() => setBooting(false)}
-            className="mt-6 border border-cyan-500/40 hover:bg-cyan-500/10 active:bg-cyan-500/20 text-cyan-400 font-bold tracking-widest uppercase text-[10px] py-2 rounded-md transition-all duration-200 cursor-pointer self-end"
+            className="mt-6 border border-[#00ff66]/40 hover:bg-[#00ff66]/10 active:bg-[#00ff66]/20 text-[#00ff66] font-bold tracking-widest uppercase text-[10px] py-2 rounded-md transition-all duration-200 cursor-pointer self-end px-4"
           >
             Skip Intrusion Boot
           </button>
@@ -94,223 +91,322 @@ export default function App() {
   }
 
   return (
-    <div className={`bg-[#05070A] text-slate-100 min-h-screen relative font-sans flex flex-col transition-all duration-500 ${globalAlertClass}`}>
-      {/* Scanline Sweep across the screen */}
-      <div className="scanlines scanline-sweep" />
+    <div className={`bg-[#030605] text-slate-200 min-h-screen relative font-sans flex flex-col transition-all duration-500 pb-24 ${globalAlertClass}`}>
+      <div className="scanlines" />
 
-      {/* Global Critical Red Alert Marquee Banner */}
+      {/* Critical Flashing Alert Banner */}
       {currentRiskScore >= 60 && (
         <div className="bg-red-950/90 border-b border-red-500/50 text-red-500 font-mono-tech py-2 text-center text-xs tracking-widest uppercase select-none animate-pulse relative z-50">
-          [!!!] WARNING: CRITICAL MALICIOUS THREAT SIGNATURE DETECTED on active channel [!!!]
+          [!!!] WARNING: CRITICAL THREAT SIGNATURE DETECTED ON ACTIVE RESOLVER [!!!]
         </div>
       )}
 
-      {/* Background Cyber Grid Pattern */}
+      {/* Volumetric Green Grid Backlighting */}
       <div 
-        className="absolute inset-0 pointer-events-none opacity-[0.03] bg-[linear-gradient(rgba(0,255,157,0.3)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,157,0.3)_1px,transparent_1px)] bg-[size:35px_35px]" 
+        className="absolute inset-0 pointer-events-none opacity-[0.02] bg-[linear-gradient(rgba(0,255,102,0.3)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,102,0.3)_1px,transparent_1px)] bg-[size:35px_35px]" 
         style={{ maskImage: 'radial-gradient(ellipse at center, black, transparent)' }}
       />
 
-      {/* Main Command Center Wrapper */}
-      <div className="max-w-6xl w-full mx-auto p-4 sm:p-6 flex-grow flex flex-col relative z-10">
+      {/* DOTDNA Custom Header */}
+      <header className="max-w-6xl w-full mx-auto px-6 py-5 flex justify-between items-center border-b border-slate-900/60 relative z-25">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">🛡️</span>
+          <span className="text-md font-cyber-panel font-extrabold tracking-wider text-slate-100 uppercase select-none">
+            DOT<span className="text-[#00ff66]">DNA</span>
+          </span>
+        </div>
         
-        {/* Header / Hero Section */}
-        <header className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center border-b border-slate-900/60 pb-6 mb-8 mt-4">
-          {/* Left Hero Specs */}
-          <div className="md:col-span-8 flex flex-col justify-center text-left">
-            <div className="flex items-center gap-2 mb-2 font-mono-tech text-[9px] tracking-widest text-cyan-500/70">
-              <span className={`w-1.5 h-1.5 rounded-full ${isAlertActive ? 'bg-red-500 animate-ping' : 'bg-cyan-400 animate-pulse'}`} />
-              <span>
-                {isAlertActive ? 'THREAT_INTERDICTION_ENGAGED' : 'SYSTEM_SECURE_SHIELD_ONLINE'}
-              </span>
-            </div>
+        <button
+          onClick={() => {
+            const footerEl = document.getElementById('main-footer');
+            if (footerEl) footerEl.scrollIntoView({ behavior: 'smooth' });
+          }}
+          className="border border-[#00ff66]/30 hover:bg-[#00ff66]/10 text-slate-200 font-mono-tech text-xs uppercase px-5 py-2 rounded-full tracking-wider transition-all duration-300 flex items-center gap-2 cursor-pointer"
+        >
+          Contact us <span className="w-1.5 h-1.5 rounded-full bg-[#00ff66] animate-pulse" />
+        </button>
+      </header>
 
-            <h1 className="text-3xl sm:text-4xl font-extrabold font-cyber-panel tracking-wider text-white uppercase select-none glitch">
-              FAN FRAUD <span className="text-cyan-400">SHIELD</span>
-            </h1>
+      {/* Main Container */}
+      <div className="max-w-6xl w-full mx-auto p-4 sm:p-6 flex-grow flex flex-col relative z-10">
+
+        {/* 1. HOME TAB (DOTDNA Visual Landing) */}
+        {activeTab === 'home' && (
+          <div className="flex flex-col gap-16 mt-4">
             
-            <p className="text-xs text-slate-500 font-mono-tech mt-2 tracking-widest uppercase">
-              ACM RVCE CODE CUP 2026 // CYBERSECURITY PS9 // TEAM KAY
-            </p>
-
-            <div className="mt-4 border-l-2 border-cyan-500/40 pl-4 text-xs font-mono-tech text-slate-500 max-w-xl leading-relaxed select-text">
-              Intelligent cyber command center protecting World Cup 2026 fans. Evaluates redirect hopping tracks, 
-              cryptographic certificates, domain registration details, and Zero-Payload LLM spoofing vectors.
-            </div>
-          </div>
-
-          {/* Right Hero: Three.js global threat globe */}
-          <div className="md:col-span-4 flex justify-center items-center h-full">
-            <Hero3D />
-          </div>
-        </header>
-
-        {/* Live Counters Stats Bar */}
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          {[
-            { label: 'THREATS BLOCKED', value: '18,482', color: 'text-red-500' },
-            { label: 'DOMAINS RESOLVED', value: '42,918', color: 'text-cyan-400' },
-            { label: 'PROTECTION RATE', value: '99.8%', color: 'text-[#00ff9d]' },
-            { label: 'RESPONSE LATENCY', value: '180 ms', color: 'text-cyan-400' }
-          ].map((stat, idx) => (
-            <div key={idx} className="glass bg-slate-950/40 border border-slate-900/60 p-4 rounded-lg flex flex-col items-center justify-center">
-              <span className={`text-xl font-cyber-panel font-bold ${stat.color}`}>
-                {stat.value}
-              </span>
-              <span className="text-[8px] font-mono-tech text-slate-500 tracking-wider mt-1 text-center">
-                {stat.label}
-              </span>
-            </div>
-          ))}
-        </section>
-
-        {/* Module Tab Navigation */}
-        <nav className="flex justify-center mb-8">
-          <div className="glass bg-slate-950/60 p-1.5 rounded-lg border border-slate-900/60 flex gap-2">
-            <button
-              onClick={() => {
-                setActiveTab('qr');
-                setCurrentRiskScore(0);
-              }}
-              className={`px-6 py-2.5 rounded-md font-mono-tech text-xs font-bold uppercase tracking-wider transition-all duration-300 flex items-center gap-2 cursor-pointer ${
-                activeTab === 'qr'
-                  ? 'bg-cyan-950/80 border border-cyan-500/40 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.25)]'
-                  : 'border border-transparent text-slate-500 hover:text-slate-300'
-              }`}
-            >
-              <span>📷</span> QR_RESOLVER
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('email');
-                setCurrentRiskScore(0);
-              }}
-              className={`px-6 py-2.5 rounded-md font-mono-tech text-xs font-bold uppercase tracking-wider transition-all duration-300 flex items-center gap-2 cursor-pointer ${
-                activeTab === 'email'
-                  ? 'bg-cyan-950/80 border border-cyan-500/40 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.25)]'
-                  : 'border border-transparent text-slate-500 hover:text-slate-300'
-              }`}
-            >
-              <span>✉️</span> EMAIL_SCRUTINIZER
-            </button>
-          </div>
-        </nav>
-
-        {/* Main Work Area */}
-        <main className="flex-1 mb-12">
-          {activeTab === 'qr' ? (
-            <QRCheck onScanComplete={handleScanComplete} />
-          ) : (
-            <EmailCheck onScanComplete={handleScanComplete} />
-          )}
-        </main>
-
-        {/* Features Info Section */}
-        <section className="mb-12">
-          <div className="text-center mb-6">
-            <h3 className="text-xs font-mono-tech font-bold tracking-widest text-slate-500 uppercase">
-              THREAT INTELLIGENCE HIGHLIGHTS
-            </h3>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              {
-                title: 'Client-Side QR Resolution',
-                icon: '🛠️',
-                desc: 'Decodes QR code matrices locally inside the browser sandbox using jsQR. Avoids PyZbar system-level dependency restrictions, streamlining production pipelines.'
-              },
-              {
-                title: 'Redirect Tracer & SSL Intel',
-                icon: '🛰️',
-                desc: 'Traces complete redirect sequences (following shortened links). Audits domain registry age via WHOIS and evaluates cryptographic SSL trust hierarchies.'
-              },
-              {
-                title: 'Zero-Payload Spoof Detection',
-                icon: '🧠',
-                desc: 'Employs Gemini AI zero-shot classifier alongside typosquat distance checks to block urgent displays name spoofings that slip past normal filters.'
-              }
-            ].map((feat, idx) => (
-              <div key={idx} className="glass glass-hover rounded-xl p-5 border border-slate-900/60 transition-all duration-300">
-                <span className="text-2xl block mb-3">{feat.icon}</span>
-                <h4 className="text-sm font-cyber-panel text-slate-200 uppercase font-bold mb-2">
-                  {feat.title}
-                </h4>
-                <p className="text-xs text-slate-500 leading-relaxed font-sans">
-                  {feat.desc}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* How It Works Section */}
-        <section className="mb-12 glass bg-slate-950/20 border border-slate-900/60 rounded-xl p-6">
-          <div className="text-center mb-6">
-            <h3 className="text-xs font-mono-tech font-bold tracking-widest text-slate-500 uppercase">
-              CORE OPERATIONAL FLOW
-            </h3>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 relative">
-            {[
-              { step: '01', title: 'AUDIT INGESTION', desc: 'Scan QR images or paste suspicious email contents into the security deck.' },
-              { step: '02', title: 'PIPELINE EVALUATION', desc: 'Deterministics scan WHOIS details, typosquat signatures, and query Gemini APIs.' },
-              { step: '03', title: 'DECISION DIRECTIVE', desc: 'Unified Risk Engine calculates risk scores and prints guidelines instantly.' }
-            ].map((item, idx) => (
-              <div key={idx} className="flex flex-col items-center text-center p-4">
-                <span className="text-xs font-mono-tech text-cyan-400 border border-cyan-500/30 rounded-full w-8 h-8 flex items-center justify-center mb-3">
-                  {item.step}
+            {/* HERO SECTION */}
+            <section className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center min-h-[400px]">
+              {/* Left Side: Dynamic Large Typography */}
+              <div className="md:col-span-7 flex flex-col text-left justify-center">
+                <span className="text-[10px] font-mono-tech text-[#00ff66] tracking-widest uppercase mb-4 block">
+                  [ OUR SERVICES ]
                 </span>
-                <h4 className="text-xs font-cyber-panel text-slate-300 font-bold mb-2 uppercase">
-                  {item.title}
-                </h4>
-                <p className="text-[11px] text-slate-500 leading-relaxed">
-                  {item.desc}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
+                
+                <h1 className="text-5xl sm:text-6xl font-extrabold font-sans tracking-tight text-white leading-none mb-6">
+                  Detection <br />
+                  <span className="font-serif italic font-light text-slate-400">and</span> Response
+                </h1>
 
-        {/* Tech Stack scrolling strip (subtle marquee simulation) */}
-        <section className="mb-12 border-t border-b border-slate-900/80 py-4 overflow-hidden relative select-none">
-          <div className="flex justify-around items-center gap-8 font-mono-tech text-[10px] text-slate-500/80 tracking-widest uppercase">
-            <span>FASTAPI API</span>
+                <p className="text-sm text-slate-500 font-sans max-w-lg leading-relaxed mb-6">
+                  We amplify your threat visibility and employ automated incident response to safeguard your resources, standing, and activities targeting fans during World Cup 2026.
+                </p>
+
+                <div 
+                  onClick={() => setActiveTab('qr')}
+                  className="flex items-center gap-3 text-xs font-mono-tech text-slate-400 hover:text-[#00ff66] transition-colors cursor-pointer group"
+                >
+                  <span className="w-6 h-6 border border-slate-800 rounded-full flex items-center justify-center group-hover:border-[#00ff66] transition-all">↓</span>
+                  <span>Scroll or select tabs to resolve threats</span>
+                </div>
+              </div>
+
+              {/* Right Side: Rotating point cloud globe */}
+              <div className="md:col-span-5 flex justify-center items-center h-full">
+                <Hero3D />
+              </div>
+            </section>
+
+            {/* WHAT WE OFFER PANEL (Horizontal cards) */}
+            <section>
+              <div className="flex flex-col md:flex-row md:items-end justify-between border-b border-slate-900 pb-4 mb-8">
+                <div>
+                  <span className="text-[9px] font-mono-tech text-[#00ff66] tracking-widest uppercase block mb-1">
+                    [ WORK SERVICES ]
+                  </span>
+                  <h3 className="text-xl font-bold font-sans text-slate-200">
+                    What we offer
+                  </h3>
+                </div>
+                <span className="text-[10px] font-mono-tech text-slate-500 uppercase mt-2 md:mt-0">
+                  Keep scrolling to learn more
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {[
+                  {
+                    num: '1.0',
+                    title: 'Redirection Hop Tracer',
+                    desc: 'Traces complete redirect routes, checking intermediate domains and parsing destination channels securely.'
+                  },
+                  {
+                    num: '2.0',
+                    title: 'SSL & WHOIS Auditor',
+                    desc: 'Evaluates cryptographic handshakes, checks expiration dates, and reads WHOIS age metrics.'
+                  },
+                  {
+                    num: '3.0',
+                    title: 'AI content analysis',
+                    desc: 'Zero-shot Gemini 1.5 Flash content classifications paired with Levenshtein distance checks for typosquatted domains.'
+                  }
+                ].map((offer, idx) => (
+                  <div key={idx} className="glass rounded-2xl p-6 border border-slate-900/60 relative flex flex-col justify-between min-h-[180px]">
+                    <div className="flex justify-between items-start mb-4">
+                      <span className="text-[10px] font-mono-tech text-[#00ff66]">{offer.num}</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#00ff66]/60" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-cyber-panel font-bold text-slate-200 uppercase mb-2">
+                        {offer.title}
+                      </h4>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        {offer.desc}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* TAILORED SOLUTIONS GRID (Grid layout with one glowing card) */}
+            <section className="mb-12">
+              <div className="text-center mb-8">
+                <h3 className="text-xl font-bold font-sans text-slate-200 flex items-center justify-center gap-2">
+                  Tailored digital security solutions <span>🛡️</span>
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-6">
+                {/* Card 1 */}
+                <div className="sm:col-span-4 glass rounded-2xl p-6 border border-slate-900/60 flex flex-col justify-between min-h-[160px]">
+                  <span className="text-[10px] font-mono-tech text-[#00ff66]">[ 1.0 ]</span>
+                  <div>
+                    <h4 className="text-sm font-cyber-panel font-bold text-slate-200 uppercase mb-1">Detection and Response</h4>
+                    <p className="text-[11px] text-slate-500">Live operational command resolvers.</p>
+                  </div>
+                </div>
+
+                {/* Card 2: ACTIVE GLOW LIME CARD */}
+                <div className="sm:col-span-4 bg-[#00ff66]/10 border border-[#00ff66]/50 rounded-2xl p-6 flex flex-col justify-between min-h-[160px] shadow-[0_0_30px_rgba(0,255,102,0.2)]">
+                  <span className="text-[10px] font-mono-tech text-[#00ff66]">[ 2.0 ]</span>
+                  <div>
+                    <h4 className="text-sm font-cyber-panel font-bold text-[#00ff66] uppercase mb-1">Threat Blockade Active</h4>
+                    <p className="text-2xl font-cyber-panel font-bold text-slate-100 mt-1">18,482</p>
+                    <p className="text-[10px] font-mono-tech text-[#00ff66] tracking-wider uppercase mt-1">TOTAL EXPLOITS DEFLECTED</p>
+                  </div>
+                </div>
+
+                {/* Card 3 */}
+                <div className="sm:col-span-4 glass rounded-2xl p-6 border border-slate-900/60 flex flex-col justify-between min-h-[160px]">
+                  <span className="text-[10px] font-mono-tech text-[#00ff66]">[ 3.0 ]</span>
+                  <div>
+                    <h4 className="text-sm font-cyber-panel font-bold text-slate-200 uppercase mb-1">Protection Rate</h4>
+                    <p className="text-2xl font-cyber-panel font-bold text-slate-100 mt-1">99.8%</p>
+                    <p className="text-[10px] font-mono-tech text-slate-500 uppercase mt-1">SHIELD ACCURACY</p>
+                  </div>
+                </div>
+
+                {/* Card 4 */}
+                <div className="sm:col-span-6 glass rounded-2xl p-6 border border-slate-900/60 flex flex-col justify-between min-h-[160px]">
+                  <span className="text-[10px] font-mono-tech text-[#00ff66]">[ 4.0 ]</span>
+                  <div>
+                    <h4 className="text-sm font-cyber-panel font-bold text-slate-200 uppercase mb-1">Latency Profile</h4>
+                    <p className="text-2xl font-cyber-panel font-bold text-slate-100 mt-1">180 ms</p>
+                    <p className="text-[10px] font-mono-tech text-slate-500 uppercase mt-1">RESPONSE TIME</p>
+                  </div>
+                </div>
+
+                {/* Card 5 */}
+                <div className="sm:col-span-6 glass rounded-2xl p-6 border border-slate-900/60 flex flex-col justify-between min-h-[160px]">
+                  <span className="text-[10px] font-mono-tech text-[#00ff66]">[ 5.0 ]</span>
+                  <div>
+                    <h4 className="text-sm font-cyber-panel font-bold text-slate-200 uppercase mb-1">LLM Intel Processor</h4>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">Runs zero-shot prompts to identifydisplay-name spoof attacks on fans.</p>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {/* 2. QR RESOLVER TAB */}
+        {activeTab === 'qr' && (
+          <main className="flex-1 mt-4">
+            <QRCheck onScanComplete={handleScanComplete} />
+          </main>
+        )}
+
+        {/* 3. EMAIL SCRUTINIZER TAB */}
+        {activeTab === 'email' && (
+          <main className="flex-1 mt-4">
+            <EmailCheck onScanComplete={handleScanComplete} />
+          </main>
+        )}
+
+        {/* Tech Stack Marquee Strip */}
+        <section className="mt-16 border-t border-b border-slate-900/80 py-4 overflow-hidden relative select-none">
+          <div className="flex justify-around items-center gap-8 font-mono-tech text-[10px] text-slate-600 tracking-widest uppercase">
+            <span>FASTAPI</span>
             <span>•</span>
             <span>REACT 19</span>
             <span>•</span>
-            <span>VITE BUNDLER</span>
+            <span>VITE</span>
             <span>•</span>
-            <span>TAILWIND CSS</span>
-            <span>•</span>
-            <span>THREE.JS ENGINE</span>
+            <span>THREE.JS</span>
             <span>•</span>
             <span>GEMINI 1.5 FLASH</span>
             <span>•</span>
-            <span>VIRUSTOTAL V3</span>
+            <span>VIRUSTOTAL</span>
             <span>•</span>
             <span>GOOGLE SAFE BROWSING</span>
           </div>
         </section>
 
-        {/* CTA Actions */}
-        <section className="mb-8 flex flex-col sm:flex-row justify-center gap-4">
-          <a
-            href="https://github.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="glass bg-[#00ff9d]/5 border border-[#00ff9d]/20 hover:border-[#00ff9d]/60 hover:bg-[#00ff9d]/10 px-8 py-3 rounded-lg font-mono-tech text-xs text-[#00ff9d] font-bold tracking-widest uppercase transition-all duration-300 shadow-[0_0_15px_rgba(0,255,157,0.05)] hover:shadow-[0_0_20px_rgba(0,255,157,0.15)] flex items-center justify-center gap-2"
-          >
-            📡 View Source Code
-          </a>
-        </section>
+        {/* DOTDNA Custom Footer */}
+        <footer 
+          id="main-footer"
+          className="border-t border-slate-900 mt-16 pt-12 pb-6 grid grid-cols-1 md:grid-cols-12 gap-8 relative z-25 font-sans"
+        >
+          <div className="md:col-span-6 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xl">🛡️</span>
+                <span className="text-md font-cyber-panel font-extrabold text-slate-100 tracking-wider uppercase">
+                  DOT<span className="text-[#00ff66]">DNA</span>
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-mono-tech max-w-sm uppercase leading-5">
+                tailored digital security solutions protecting fans during World Cup 2026.
+              </p>
+            </div>
+            <p className="text-[10px] font-mono-tech text-slate-600 uppercase mt-8 md:mt-0">
+              © Copyright 2026 Team KAY. All rights reserved.
+            </p>
+          </div>
 
-        {/* Footer */}
-        <footer className="border-t border-slate-900 mt-12 py-4 flex flex-col sm:flex-row justify-between items-center text-[10px] font-mono-tech text-slate-600 uppercase tracking-widest gap-2">
-          <span>🛡️ FAN FRAUD SHIELD V1.0.0</span>
-          <span>ACM RVCE CODE CUP 2026 // TEAM KAY</span>
+          <div className="md:col-span-3">
+            <span className="text-[10px] font-mono-tech text-[#00ff66] tracking-widest uppercase block mb-4">
+              [ RESOLVERS ]
+            </span>
+            <ul className="space-y-2 text-xs font-mono-tech text-slate-400">
+              <li>
+                <button onClick={() => { setActiveTab('qr'); setCurrentRiskScore(0); }} className="hover:text-white transition-colors cursor-pointer">
+                  Detection and Response
+                </button>
+              </li>
+              <li>
+                <button onClick={() => { setActiveTab('email'); setCurrentRiskScore(0); }} className="hover:text-white transition-colors cursor-pointer">
+                  Offensive Security
+                </button>
+              </li>
+            </ul>
+          </div>
+
+          <div className="md:col-span-3">
+            <span className="text-[10px] font-mono-tech text-[#00ff66] tracking-widest uppercase block mb-4">
+              [ TEAM ]
+            </span>
+            <ul className="space-y-2 text-xs font-mono-tech text-slate-400">
+              <li>ACM RVCE CODE CUP 2026</li>
+              <li>TEAM KAY CREDITS</li>
+            </ul>
+          </div>
         </footer>
 
       </div>
+
+      {/* Fixed Bottom Capsule Navigation Bar */}
+      <nav className="bottom-nav-capsule">
+        <button
+          onClick={() => {
+            setActiveTab('home');
+            setCurrentRiskScore(0);
+          }}
+          className={`text-[10px] font-mono-tech font-bold uppercase tracking-widest transition-colors cursor-pointer ${
+            activeTab === 'home' ? 'text-[#00ff66]' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          • Home
+        </button>
+        
+        <span className="text-slate-800 font-mono-tech select-none">|</span>
+        
+        <button
+          onClick={() => {
+            setActiveTab('qr');
+            setCurrentRiskScore(0);
+          }}
+          className={`text-[10px] font-mono-tech font-bold uppercase tracking-widest transition-colors flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'qr' ? 'text-[#00ff66]' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          📷 Resolver
+        </button>
+        
+        <span className="text-slate-800 font-mono-tech select-none">|</span>
+        
+        <button
+          onClick={() => {
+            setActiveTab('email');
+            setCurrentRiskScore(0);
+          }}
+          className={`text-[10px] font-mono-tech font-bold uppercase tracking-widest transition-colors flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'email' ? 'text-[#00ff66]' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          ✉️ Scrutinizer
+        </button>
+      </nav>
     </div>
   );
 }

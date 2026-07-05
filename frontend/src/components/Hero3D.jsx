@@ -24,16 +24,15 @@ export default function Hero3D() {
     containerRef.current.appendChild(renderer.domElement);
 
     // 4. Parallax Group
-    // Add all meshes to a master group so we can tilt the entire coordinate frame based on the mouse.
     const masterGroup = new THREE.Group();
     scene.add(masterGroup);
 
-    // 5. Threat Globe (glowing dots/nodes connected by wireframe lines)
-    const globeGeometry = new THREE.IcosahedronGeometry(2.0, 2); // Higher detail for dots
+    // 5. DOTDNA Threat Globe (glowing lime green nodes connected by thin lines)
+    const globeGeometry = new THREE.IcosahedronGeometry(2.0, 2); 
     
     // Wireframe connection lines
     const lineMaterial = new THREE.MeshBasicMaterial({
-      color: 0x00ff9d, // Neon green accent
+      color: 0x00ff66, // Pure Neon Green
       wireframe: true,
       transparent: true,
       opacity: 0.12,
@@ -43,54 +42,53 @@ export default function Hero3D() {
 
     // Node dots
     const nodeMaterial = new THREE.PointsMaterial({
-      color: 0x00d9ff, // Electric Cyan
-      size: 0.06,
+      color: 0x00ff66, // Pure Neon Green
+      size: 0.07,
       transparent: true,
-      opacity: 0.75,
+      opacity: 0.85,
     });
     const globeNodes = new THREE.Points(globeGeometry, nodeMaterial);
     masterGroup.add(globeNodes);
 
-    // 6. Central Shield/Core Icon (simple geometry rotating inside the globe)
+    // 6. Central Shield/Core Icon (rotating inside the globe)
     const coreGeometry = new THREE.OctahedronGeometry(0.7, 0);
     const coreMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff003c, // Glitch Red for the warning core
+      color: 0x00ff66, // Match matching green core
       wireframe: true,
       transparent: true,
-      opacity: 0.4,
+      opacity: 0.45,
     });
     const coreMesh = new THREE.Mesh(coreGeometry, coreMaterial);
     masterGroup.add(coreMesh);
 
     // 7. Drifting Upward Data Packets (particles)
-    const particleCount = 60;
+    const particleCount = 70;
     const particleGeometry = new THREE.BufferGeometry();
     const positions = new Float32Array(particleCount * 3);
     const speeds = [];
 
     for (let i = 0; i < particleCount; i++) {
-      // Random spread in cylinder/sphere shape
       const theta = Math.random() * Math.PI * 2;
       const radius = 1.0 + Math.random() * 2.5;
       positions[i * 3] = Math.cos(theta) * radius; // X
       positions[i * 3 + 1] = (Math.random() - 0.5) * 5.0; // Y
       positions[i * 3 + 2] = Math.sin(theta) * radius; // Z
       
-      speeds.push(0.01 + Math.random() * 0.02); // Upward float speed
+      speeds.push(0.008 + Math.random() * 0.015); // Upward float speed
     }
 
     particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     
     const packetMaterial = new THREE.PointsMaterial({
-      color: 0x00ff9d, // Neon green packets
+      color: 0x00ff66, // Pure Neon Green
       size: 0.05,
       transparent: true,
-      opacity: 0.5,
+      opacity: 0.6,
     });
     const dataPackets = new THREE.Points(particleGeometry, packetMaterial);
     masterGroup.add(dataPackets);
 
-    // 8. Mouse Parallax event listeners
+    // 8. Mouse Parallax
     let mouseX = 0;
     let mouseY = 0;
     let targetX = 0;
@@ -100,7 +98,6 @@ export default function Hero3D() {
       const rect = containerRef.current.getBoundingClientRect();
       const x = e.clientX - rect.left - rect.width / 2;
       const y = e.clientY - rect.top - rect.height / 2;
-      // Convert to normalized coordinates (-0.5 to 0.5)
       targetX = x / rect.width;
       targetY = y / rect.height;
     };
@@ -114,13 +111,13 @@ export default function Hero3D() {
       animationId = requestAnimationFrame(animate);
 
       // Slow auto-rotations
-      globeLines.rotation.y += 0.001;
-      globeLines.rotation.x += 0.0005;
-      globeNodes.rotation.y += 0.001;
-      globeNodes.rotation.x += 0.0005;
+      globeLines.rotation.y += 0.0008;
+      globeLines.rotation.x += 0.0004;
+      globeNodes.rotation.y += 0.0008;
+      globeNodes.rotation.x += 0.0004;
 
-      coreMesh.rotation.y -= 0.003;
-      coreMesh.rotation.z += 0.0015;
+      coreMesh.rotation.y -= 0.002;
+      coreMesh.rotation.z += 0.001;
 
       // Animate drifting data packets (upward)
       const positionsArr = posAttribute.array;
@@ -128,8 +125,8 @@ export default function Hero3D() {
         positionsArr[i * 3 + 1] += speeds[i]; // Move Y up
         
         // Reset if drifted too high
-        if (positionsArr[i * 3 + 1] > 3.0) {
-          positionsArr[i * 3 + 1] = -3.0;
+        if (positionsArr[i * 3 + 1] > 3.5) {
+          positionsArr[i * 3 + 1] = -3.5;
         }
       }
       posAttribute.needsUpdate = true;
@@ -138,7 +135,6 @@ export default function Hero3D() {
       mouseX += (targetX - mouseX) * 0.05;
       mouseY += (targetY - mouseY) * 0.05;
       
-      // Tilt coordinates based on cursor offset
       masterGroup.rotation.y = mouseX * 0.5;
       masterGroup.rotation.x = -mouseY * 0.5;
 

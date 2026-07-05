@@ -54,9 +54,9 @@ export default function VerdictCard({ result }) {
       guidelines: 'WARNING: Origin shows suspicious attributes. Verify target domain spelling, cert details, and sender validity before performing any operations.'
     },
     LOW: {
-      border: 'border-[#00ff9d]/40 shadow-[0_0_20px_rgba(0,255,157,0.15)] bg-slate-950/80',
-      badge: 'bg-[#00ff9d]/10 text-[#00ff9d] border-[#00ff9d]/30',
-      text: 'text-[#00ff9d]',
+      border: 'border-[#00ff66]/40 shadow-[0_0_20px_rgba(0,255,102,0.15)] bg-slate-950/80',
+      badge: 'bg-[#00ff66]/10 text-[#00ff66] border-[#00ff66]/30',
+      text: 'text-[#00ff66]',
       icon: '🛡️',
       marker: '[✓]',
       banner: 'SECURITY PROTOCOL SECURED',

@@ -54,3 +54,6 @@ yarn-error.log*
 *.sln
 *.sw?
 .DS_Store
+
+# Design Reference Video
+original-fe9d2b09d7050d619505566dd480af4a.mp4
