@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<!--
+  Matrix Hand Hero Effect
+  =======================
+  HOW TO USE:
+  (1) As an <iframe> hero background:
+      <iframe src="matrix-hand.html" style="position:absolute;inset:0;width:100%;height:100%;border:none;pointer-events:none;" allowtransparency="true"></iframe>
+
+  (2) Copy the two <canvas> elements + the <script> block directly into your page.
+      Make sure the parent element has position:relative (or absolute) so the canvases
+      layer correctly.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Matrix Hand</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+  #wrap { position: relative; width: 100%; height: 100%; }
+  canvas { position: absolute; top: 0; left: 0; display: block; }
+  #rainCanvas  { z-index: 1; }
+  #handCanvas  { z-index: 2; background: transparent; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="rainCanvas"></canvas>
+  <canvas id="handCanvas"></canvas>
+</div>
+
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TUNABLE CONSTANTS
+// ─────────────────────────────────────────────────────────────────────────────
+const CFG = {
+  // Hand particles
+  PARTICLE_COLOR_CORE : '#39ff88',   // bright centre
+  PARTICLE_COLOR_GLOW : '#00cc55',   // outer glow
+  PARTICLE_COUNT      : 3200,        // target number of hand particles
+  HAND_HEIGHT_RATIO   : 0.62,        // hand height as fraction of viewport height
+  GLOW_RADIUS         : 9,           // px of glow sprite (logical)
+
+  // Cycle timing (seconds)
+  FALL_DURATION    : 2.4,   // time for all particles to fall into place
+  HOLD_DURATION    : 4.5,   // how long hand stays fully formed
+  DISPERSE_DURATION: 1.6,   // how long disperse takes before loop
+
+  // Rain
+  RAIN_FONT_SIZE   : 14,    // px
+  RAIN_SPEED_MIN   : 1.0,   // cells/frame multiplier
+  RAIN_SPEED_MAX   : 2.8,
+  RAIN_DIM_COLOR   : 'rgba(0,0,0,0.045)',  // trail fade per frame
+
+  // Emoji used to sample hand shape
+  HAND_EMOJI       : '✋',
+  EMOJI_RENDER_SIZE: 400,   // px – bigger = more particle resolution
+  SAMPLE_ALPHA_THRESH: 60,  // 0-255, pixel must be opaque enough to count
+  SAMPLE_STRIDE    : 3,     // sample every N pixels (lower = denser but more particles)
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+const rainCanvas = document.getElementById('rainCanvas');
+const handCanvas = document.getElementById('handCanvas');
+const rCtx = rainCanvas.getContext('2d');
+const hCtx = handCanvas.getContext('2d');
+
+let DPR = window.devicePixelRatio || 1;
+let W = 0, H = 0;          // logical px
+let rainCols = [];          // rain column state
+let handTargets = [];       // [{x,y}] in logical px, centred on viewport
+let particles  = [];        // hand particle objects
+let glowSprite = null;      // pre-rendered glow canvas
+let phase = 'idle';         // idle | falling | locked | dispersing
+let phaseStart = 0;         // performance.now() of phase start
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTILITIES
+// ─────────────────────────────────────────────────────────────────────────────
+function rand(a, b) { return a + Math.random() * (b - a); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RESIZE — recompute everything
+// ─────────────────────────────────────────────────────────────────────────────
+function resize() {
+  DPR = window.devicePixelRatio || 1;
+  W   = window.innerWidth;
+  H   = window.innerHeight;
+
+  for (const c of [rainCanvas, handCanvas]) {
+    c.width  = Math.round(W * DPR);
+    c.height = Math.round(H * DPR);
+    c.style.width  = W + 'px';
+    c.style.height = H + 'px';
+  }
+  rCtx.scale(DPR, DPR);
+  hCtx.scale(DPR, DPR);
+
+  buildRain();
+  buildGlowSprite();
+  buildHandTargets();
+  resetParticles();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RAIN
+// ─────────────────────────────────────────────────────────────────────────────
+const HEX_CHARS = '0123456789ABCDEF';
+function randChar() { return HEX_CHARS[Math.floor(Math.random() * HEX_CHARS.length)]; }
+
+function buildRain() {
+  const fs   = CFG.RAIN_FONT_SIZE;
+  const cols = Math.ceil(W / fs);
+  rainCols = [];
+  for (let i = 0; i < cols; i++) {
+    rainCols.push({
+      x    : i * fs,
+      y    : rand(0, H),
+      speed: rand(CFG.RAIN_SPEED_MIN, CFG.RAIN_SPEED_MAX),
+      char : randChar(),
+      tick : 0,
+    });
+  }
+}
+
+function drawRain(dt) {
+  // Fade trail
+  rCtx.fillStyle = CFG.RAIN_DIM_COLOR;
+  rCtx.fillRect(0, 0, W, H);
+
+  const fs = CFG.RAIN_FONT_SIZE;
+  rCtx.font = `${fs}px monospace`;
+
+  for (const col of rainCols) {
+    col.tick += dt * 60; // normalise to ~60fps ticks
+    if (col.tick >= 1) {
+      col.tick -= 1;
+      col.char = randChar();
+      col.y   += fs * col.speed;
+      if (col.y > H + fs) col.y = -fs;
+
+      // Vary green brightness per character
+      const lum = 20 + Math.floor(Math.random() * 40);
+      rCtx.fillStyle = `hsl(140,80%,${lum}%)`;
+      rCtx.fillText(col.char, col.x, col.y);
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GLOW SPRITE (pre-render once, drawImage per particle)
+// ─────────────────────────────────────────────────────────────────────────────
+function buildGlowSprite() {
+  const r  = CFG.GLOW_RADIUS;
+  const sz = r * 2 + 2;
+  const oc = document.createElement('canvas');
+  oc.width = oc.height = sz;
+  const oc2 = oc.getContext('2d');
+  const grad = oc2.createRadialGradient(r+1, r+1, 0, r+1, r+1, r);
+  grad.addColorStop(0,   CFG.PARTICLE_COLOR_CORE);
+  grad.addColorStop(0.35, CFG.PARTICLE_COLOR_GLOW);
+  grad.addColorStop(1,   'rgba(0,0,0,0)');
+  oc2.fillStyle = grad;
+  oc2.fillRect(0, 0, sz, sz);
+  glowSprite = oc;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HAND SHAPE — sample emoji pixels
+// ─────────────────────────────────────────────────────────────────────────────
+function buildHandTargets() {
+  const es = CFG.EMOJI_RENDER_SIZE;
+  const oc = document.createElement('canvas');
+  oc.width = oc.height = es;
+  const oc2 = oc.getContext('2d');
+  oc2.clearRect(0, 0, es, es);
+  oc2.font      = `${Math.floor(es * 0.88)}px serif`;
+  oc2.textAlign = 'center';
+  oc2.textBaseline = 'middle';
+  oc2.fillStyle = '#fff';
+  oc2.fillText(CFG.HAND_EMOJI, es/2, es/2);
+
+  const data    = oc2.getImageData(0, 0, es, es).data;
+  const stride  = CFG.SAMPLE_STRIDE;
+  const thresh  = CFG.SAMPLE_ALPHA_THRESH;
+  const rawPts  = [];
+
+  for (let py = 0; py < es; py += stride) {
+    for (let px = 0; px < es; px += stride) {
+      const idx = (py * es + px) * 4;
+      if (data[idx + 3] >= thresh) rawPts.push({ nx: px/es, ny: py/es });
+    }
+  }
+
+  // Scale to desired hand height, centre in viewport
+  const handH = H * CFG.HAND_HEIGHT_RATIO;
+  const handW = handH; // emoji is roughly square
+  const offX  = (W - handW) / 2;
+  const offY  = (H - handH) / 2 + H * 0.04; // very slightly below centre
+
+  handTargets = rawPts.map(p => ({
+    x: offX + p.nx * handW,
+    y: offY + p.ny * handH,
+  }));
+
+  // Sub-sample if we got too many points
+  if (handTargets.length > CFG.PARTICLE_COUNT) {
+    const step = handTargets.length / CFG.PARTICLE_COUNT;
+    const kept = [];
+    for (let i = 0; i < CFG.PARTICLE_COUNT; i++) {
+      kept.push(handTargets[Math.round(i * step)]);
+    }
+    handTargets = kept;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PARTICLES
+// ─────────────────────────────────────────────────────────────────────────────
+function resetParticles() {
+  // Sort targets top-down so fingertip particles get assigned first
+  const sorted = [...handTargets].sort((a, b) => a.y - b.y);
+
+  particles = sorted.map((t, i) => {
+    const delay = (i / sorted.length) * CFG.FALL_DURATION; // stagger 0..FALL_DURATION
+    return {
+      tx   : t.x,
+      ty   : t.y,
+      x    : t.x + rand(-15, 15),   // start X near target X
+      y    : rand(-H * 0.6, -20),   // start above viewport
+      vy   : rand(200, 500),         // px/sec fall speed
+      delay: delay,                  // seconds before this particle starts moving
+      alpha: 0,
+      settled: false,
+      // idle jitter
+      jitterPhase: rand(0, Math.PI * 2),
+      jitterSpeed: rand(1.5, 3.5),
+      jitterAmp  : rand(0.4, 1.8),
+      flicker    : 1,
+      flickerTimer: rand(0, 2),
+    };
+  });
+
+  phase      = 'falling';
+  phaseStart = performance.now();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DRAW HAND PARTICLES
+// ─────────────────────────────────────────────────────────────────────────────
+function drawHand(now, dt) {
+  hCtx.clearRect(0, 0, W, H);
+
+  const elapsed = (now - phaseStart) / 1000; // seconds since phase began
+  const gs = CFG.GLOW_RADIUS * 2 + 2;
+
+  // Count settled to detect phase transition
+  let allSettled = true;
+
+  for (const p of particles) {
+    if (phase === 'falling') {
+      if (elapsed < p.delay) {
+        // not started yet — stay invisible above
+        allSettled = false;
+        continue;
+      }
+      const active = elapsed - p.delay;
+
+      if (!p.settled) {
+        allSettled = false;
+        // Accelerate downward
+        p.y  += p.vy * dt;
+        p.alpha = Math.min(1, active * 1.5);
+
+        // Approach target X gently
+        p.x += (p.tx - p.x) * dt * 6;
+
+        // Check arrival
+        if (p.y >= p.ty) {
+          p.y = p.ty;
+          p.settled = true;
+        }
+      }
+
+      // Draw (with comet tail if falling)
+      if (!p.settled) {
+        // Simple 3-dot trail above
+        for (let t = 1; t <= 3; t++) {
+          const ty2 = p.y - t * 8;
+          const ta  = p.alpha * (1 - t/4) * 0.4;
+          hCtx.globalAlpha = ta;
+          hCtx.drawImage(glowSprite, p.x - gs/2, ty2 - gs/2, gs, gs);
+        }
+      }
+
+      hCtx.globalAlpha = p.alpha;
+      hCtx.drawImage(glowSprite, p.x - gs/2, p.y - gs/2, gs, gs);
+
+    } else if (phase === 'locked') {
+      // Idle jitter + flicker
+      p.flickerTimer -= dt;
+      if (p.flickerTimer <= 0) {
+        p.flicker      = rand(0.5, 1.0);
+        p.flickerTimer = rand(0.05, 0.8);
+      }
+      const jx = Math.sin(now * 0.001 * p.jitterSpeed + p.jitterPhase) * p.jitterAmp;
+      const jy = Math.cos(now * 0.0013* p.jitterSpeed + p.jitterPhase) * p.jitterAmp;
+
+      hCtx.globalAlpha = p.flicker;
+      hCtx.drawImage(glowSprite, (p.tx + jx) - gs/2, (p.ty + jy) - gs/2, gs, gs);
+
+    } else if (phase === 'dispersing') {
+      // Drift upward + fade out
+      const t = Math.min(1, elapsed / CFG.DISPERSE_DURATION);
+      p.y -= dt * rand(80, 220);
+      p.alpha = 1 - t;
+      hCtx.globalAlpha = Math.max(0, p.alpha * p.flicker);
+      hCtx.drawImage(glowSprite, p.x - gs/2, p.y - gs/2, gs, gs);
+    }
+  }
+
+  hCtx.globalAlpha = 1;
+
+  // ── Phase transitions ──
+  if (phase === 'falling' && allSettled) {
+    phase      = 'locked';
+    phaseStart = now;
+  }
+  if (phase === 'locked' && elapsed >= CFG.HOLD_DURATION) {
+    // Copy current positions to x,y for disperse
+    for (const p of particles) { p.x = p.tx; p.y = p.ty; p.flicker = rand(0.7,1.0); }
+    phase      = 'dispersing';
+    phaseStart = now;
+  }
+  if (phase === 'dispersing' && elapsed >= CFG.DISPERSE_DURATION + 0.3) {
+    buildHandTargets();
+    resetParticles();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN LOOP
+// ─────────────────────────────────────────────────────────────────────────────
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+let lastTime = null;
+function loop(now) {
+  if (lastTime === null) lastTime = now;
+  const dt = Math.min((now - lastTime) / 1000, 0.05); // cap dt at 50ms
+  lastTime = now;
+
+  if (reducedMotion) {
+    // Static formed hand — no animation
+    hCtx.clearRect(0, 0, W, H);
+    const gs = CFG.GLOW_RADIUS * 2 + 2;
+    for (const p of particles) {
+      hCtx.globalAlpha = 1;
+      hCtx.drawImage(glowSprite, p.tx - gs/2, p.ty - gs/2, gs, gs);
+    }
+    // Rain still runs (subtle)
+    drawRain(dt);
+  } else {
+    drawRain(dt);
+    drawHand(now, dt);
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  // Re-scale canvases but preserve phase
+  DPR = window.devicePixelRatio || 1;
+  W   = window.innerWidth;
+  H   = window.innerHeight;
+
+  for (const c of [rainCanvas, handCanvas]) {
+    c.width  = Math.round(W * DPR);
+    c.height = Math.round(H * DPR);
+    c.style.width  = W + 'px';
+    c.style.height = H + 'px';
+    // Re-apply scale (resizing resets transform)
+    const ctx = c === rainCanvas ? rCtx : hCtx;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+
+  buildRain();
+  buildGlowSprite();
+  buildHandTargets();
+  resetParticles();
+});
+
+resize();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
