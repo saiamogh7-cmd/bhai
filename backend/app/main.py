@@ -33,8 +33,13 @@ app = FastAPI(
 origins_str = os.getenv("ALLOWED_ORIGINS", "")
 origins = [o.strip() for o in origins_str.split(",") if o.strip()]
 if not origins:
-    # Allow all origins by default in development if not configured
     origins = ["*"]
+else:
+    # Always ensure Vercel production and localhost are allowed
+    for d in ["http://localhost:5173", "https://bhai-snowy.vercel.app"]:
+        if d not in origins:
+            origins.append(d)
+
 
 app.add_middleware(
     CORSMiddleware,
