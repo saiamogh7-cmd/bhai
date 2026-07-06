@@ -1,0 +1,3 @@
+From: "Security Center" <admin@security-verify.net>
+Subject: Action Required: Re-authenticate your session
+Body: Hello, Your Authenticator session has expired today. Scan the QR code with your phone to verify your credentials immediately to avoid lock-out.
