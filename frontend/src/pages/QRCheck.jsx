@@ -129,12 +129,15 @@ export default function QRCheck({ onScanComplete }) {
           console.error(err);
           setStatus('error');
           if (onScanComplete) onScanComplete(null);
+          const errMsgLower = (err.message || '').toLowerCase();
           if (err.message.includes('NO_QR')) {
             setErrorMsg('QR DECODE FAILED: Could not locate a QR code signature. Ensure the code is clear and well-lit.');
           } else if (err.message.includes('TIMEOUT')) {
-            setErrorMsg('SCAN TIMEOUT: Connection timed out. The target domain failed to resolve or respond in time.');
+            setErrorMsg('SCAN TIMEOUT: Connection timed out. The threat assessment server failed to respond in time.');
           } else if (err.message.includes('RATE_LIMIT')) {
             setErrorMsg('SCAN BLOCKED: Rate limit exceeded. Too many requests have been sent. Please stand by before querying.');
+          } else if (errMsgLower.includes('failed to fetch') || errMsgLower.includes('load failed')) {
+            setErrorMsg('CONNECTION FAILURE: Failed to reach the threat assessment backend. Please check that the backend server is running and CORS is configured.');
           } else {
             setErrorMsg(`ANALYSIS ERROR: ${err.message || 'An unexpected error occurred during evaluation.'}`);
           }

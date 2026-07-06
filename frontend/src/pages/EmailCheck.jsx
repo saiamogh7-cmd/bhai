@@ -54,10 +54,13 @@ export default function EmailCheck({ onScanComplete }) {
       console.error(err);
       setStatus('error');
       if (onScanComplete) onScanComplete(null);
+      const errMsgLower = (err.message || '').toLowerCase();
       if (err.message.includes('TIMEOUT')) {
         setErrorMsg('SCAN TIMEOUT: Connection timed out. The classification server failed to respond in time.');
       } else if (err.message.includes('RATE_LIMIT')) {
         setErrorMsg('SCAN BLOCKED: API rate limit hit. Too many email content scans requested. Please stand by.');
+      } else if (errMsgLower.includes('failed to fetch') || errMsgLower.includes('load failed')) {
+        setErrorMsg('CONNECTION FAILURE: Failed to reach the threat assessment backend. Please check that the backend server is running and CORS is configured.');
       } else {
         setErrorMsg(`ANALYSIS ERROR: ${err.message || 'An unexpected error occurred during evaluation.'}`);
       }

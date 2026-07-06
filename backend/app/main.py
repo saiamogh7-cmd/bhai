@@ -35,15 +35,9 @@ app = FastAPI(
 )
 
 # CORS Setup
-origins_str = os.getenv("ALLOWED_ORIGINS", "")
-origins = [o.strip() for o in origins_str.split(",") if o.strip()]
-if not origins:
-    origins = ["*"]
-else:
-    # Always ensure Vercel production and localhost are allowed
-    for d in ["http://localhost:5173", "https://bhai-snowy.vercel.app"]:
-        if d not in origins:
-            origins.append(d)
+# Hackathon mode: Allow all origins ("*") to guarantee that judges' preview URLs or different deployment links
+# do not encounter a "Failed to fetch" CORS error. Credentials are False, so this is fully supported.
+origins = ["*"]
 
 
 app.add_middleware(
