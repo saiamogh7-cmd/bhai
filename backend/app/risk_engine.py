@@ -1,22 +1,56 @@
 from typing import Dict, Any, List, Literal
-from backend.app.services.redirect_chain import follow_redirects
-from backend.app.services.domain_intel import get_domain_age_days, check_ssl, extract_hostname
-from backend.app.services.reputation import check_reputation
-from backend.app.services.header_parser import parse_email_text
-from backend.app.services.spoof_rules import check_typosquatting, check_rules, OFFICIAL_DOMAINS
-from backend.app.services.llm_classifier import classify_email_llm
+from app.services.redirect_chain import follow_redirects
+from app.services.domain_intel import get_domain_age_days, check_ssl, extract_hostname
+from app.services.reputation import check_reputation
+from app.services.header_parser import parse_email_text
+from app.services.spoof_rules import check_typosquatting, check_rules, OFFICIAL_DOMAINS
+from app.services.llm_classifier import classify_email_llm
 
 def assess_qr_risk(url: str) -> Dict[str, Any]:
     """
     Computes a composite risk score and verdict for a scanned QR URL.
     Returns: { "verdict": "HIGH"|"MEDIUM"|"LOW", "score": int, "reasons": List[str], "source": "qr" }
     """
+    # Check if the target is a valid URL/domain
+    import urllib.parse
+    parsed_url = urllib.parse.urlparse(url if url.startswith(("http://", "https://")) else "https://" + url)
+    hostname = parsed_url.hostname or parsed_url.netloc
+    
+    if not hostname or ("." not in hostname and not hostname.startswith("localhost")):
+        return {
+            "verdict": "LOW",
+            "score": 0,
+            "reasons": [
+                f"Decoded content is raw text/data, not a web link.",
+                "No active URL target or network redirect threat vectors are present."
+            ],
+            "source": "qr"
+        }
+    
     reasons = []
     score = 0
     
     # 1. Follow redirects
     hops, final_url = follow_redirects(url, timeout=5.0)
     final_hostname = extract_hostname(final_url)
+    
+    # Check for deceptive URL authority (presence of '@' symbol or userinfo)
+    # in both the initial scanned URL and the final destination URL
+    import urllib.parse
+    has_deceptive_authority = False
+    for checked_url in [url, final_url]:
+        parsed_check = urllib.parse.urlparse(checked_url if checked_url.startswith(("http://", "https://")) else "https://" + checked_url)
+        if parsed_check.netloc and "@" in parsed_check.netloc:
+            has_deceptive_authority = True
+            userinfo = parsed_check.netloc.split("@")[0]
+            reasons.append(
+                f"Deceptive URL authority: URL contains an '@' symbol in the domain portion (pretending to be '{userinfo}'). "
+                "This is a high-risk obfuscation tactic commonly used in credential harvesting and phishing scams to impersonate trusted brands."
+            )
+            break
+            
+    if has_deceptive_authority:
+        score += 85
     
     # Add hop count reason if redirecting
     if len(hops) > 1:
@@ -59,6 +93,13 @@ def assess_qr_risk(url: str) -> Dict[str, Any]:
     else:
         # Whois lookup not available or failed
         reasons.append("Domain WHOIS record is unavailable or lookup failed.")
+        
+    # 5. Check typosquatting on destination hostname
+    clean_hostname = final_hostname.split(":")[0] if ":" in final_hostname else final_hostname
+    is_typo, typo_reason = check_typosquatting(clean_hostname)
+    if is_typo and typo_reason:
+        score += 65
+        reasons.append(f"Typosquatting detected: {typo_reason}")
         
     # Cap score
     score = min(max(score, 0), 100)
@@ -163,6 +204,9 @@ def assess_email_risk(raw_email: str) -> Dict[str, Any]:
     else:
         verdict = "LOW"
         
+    if from_domain in OFFICIAL_DOMAINS and score < 25:
+        reasons.append(f"Verified Sender: Sender domain '{from_domain}' matches official partner channels.")
+
     if not reasons:
         reasons.append("Email contains no suspicious headers, spoofs, or urgent solicitor patterns.")
         

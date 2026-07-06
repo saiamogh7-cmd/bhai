@@ -55,8 +55,8 @@ export default function PipelineVisualization({ source, status, currentStep }) {
         {steps.map((step, idx) => {
           const isCompleted = currentStep > idx || status === 'success';
           const isActive = currentStep === idx && isLoading;
-          const isPending = currentStep < idx && !isCompleted;
-          
+          // isPending is implicitly handled by the default nodeColor
+
           let nodeColor = 'bg-slate-900 border-slate-800 text-slate-600';
           let textColor = 'text-slate-500';
           let pulseClass = '';

@@ -1,27 +1,32 @@
 import os
+import sys
+# Add parent directory of main.py to sys.path to allow absolute imports from 'app'
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import socket
 from typing import List, Literal
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
-# Import risk engine assessment functions
-from backend.app.risk_engine import assess_qr_risk, assess_email_risk
+# Set a global default socket timeout (4.0s) to prevent third-party libs like whois from hanging indefinitely
+socket.setdefaulttimeout(4.0)
 
-# Load environment variables
-import os
+
+# Load environment variables first (before importing app modules that read env vars)
 load_dotenv()
-backend_env = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
-if os.path.exists(backend_env):
-    load_dotenv(backend_env, override=True)
+_backend_env = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+if os.path.exists(_backend_env):
+    load_dotenv(_backend_env, override=True)
 
-print(f"DEBUG: backend_env is {backend_env}, exists: {os.path.exists(backend_env)}", flush=True)
+print(f"DEBUG: backend_env is {_backend_env}, exists: {os.path.exists(_backend_env)}", flush=True)
 print(f"ENV CONF: SAFE_BROWSING_API_KEY present: {bool(os.getenv('SAFE_BROWSING_API_KEY'))}", flush=True)
 print(f"ENV CONF: VIRUSTOTAL_API_KEY present: {bool(os.getenv('VIRUSTOTAL_API_KEY'))}", flush=True)
 print(f"ENV CONF: LLM_API_KEY present: {bool(os.getenv('LLM_API_KEY'))}", flush=True)
 
-
-
+# Import risk engine assessment functions (after env is loaded)
+from app.risk_engine import assess_qr_risk, assess_email_risk
 
 app = FastAPI(
     title="Fan Fraud Shield API",

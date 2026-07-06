@@ -11,7 +11,12 @@ def extract_domain(url: str) -> str:
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
     parsed = urllib.parse.urlparse(url)
-    return parsed.netloc or parsed.path.split("/")[0]
+    netloc = parsed.netloc or parsed.path.split("/")[0]
+    if "@" in netloc:
+        netloc = netloc.split("@")[-1]
+    if ":" in netloc:
+        netloc = netloc.split(":")[0]
+    return netloc
 
 def check_reputation(url: str) -> Tuple[bool, List[str]]:
     """

@@ -6,7 +6,7 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 export async function checkQR(url) {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000); // 12-second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45-second timeout (accommodates backend cold starts)
 
     const response = await fetch(`${BASE_URL}/api/qr/check`, {
       method: 'POST',
@@ -41,7 +41,7 @@ export async function checkQR(url) {
 export async function checkEmail(content) {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000); // 12-second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45-second timeout (accommodates backend cold starts)
 
     const response = await fetch(`${BASE_URL}/api/email/check`, {
       method: 'POST',

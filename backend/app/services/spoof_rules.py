@@ -16,12 +16,19 @@ URGENCY_KEYWORDS = [
     r"urgent",
     r"immediately",
     r"within \d+ hours",
-    r"expires",
+    r"expire",
+    r"expired",
     r"action required",
     r"last chance",
     r"limited seats",
     r"suspend",
-    r"suspension"
+    r"suspension",
+    r"lock out",
+    r"locked out",
+    r"deactivate",
+    r"deactivation",
+    r"restrict",
+    r"terminate"
 ]
 
 REPLY_TO_CLAIM_KEYWORDS = [
@@ -35,7 +42,23 @@ REPLY_TO_CLAIM_KEYWORDS = [
     r"winner",
     r"congratulations",
     r"win free",
-    r"free tickets"
+    r"free tickets",
+    r"re-authenticate",
+    r"verify password",
+    r"update password",
+    r"session expired",
+    r"verify your identity"
+]
+
+QUISHING_KEYWORDS = [
+    r"scan the qr",
+    r"scan qr",
+    r"qr code below",
+    r"smartphone to re-authenticate",
+    r"smartphone to authenticate",
+    r"scan with your smartphone",
+    r"scan this qr",
+    r"qr code to re-authenticate"
 ]
 
 def levenshtein_distance(s1: str, s2: str) -> int:
@@ -87,7 +110,7 @@ def check_typosquatting(domain: str) -> Tuple[bool, Optional[str]]:
 
 def check_rules(body: str, subject: str) -> Tuple[bool, int, List[str]]:
     """
-    Checks the email body and subject for deterministic urgency and reply-to-claim scam patterns.
+    Checks the email body and subject for deterministic urgency, reply-to-claim scams, and QR phishing (quishing).
     Returns (is_flagged, rule_score, reasons)
     """
     text = (subject + " " + body).lower()
@@ -98,18 +121,24 @@ def check_rules(body: str, subject: str) -> Tuple[bool, int, List[str]]:
     urgency_found = [pat for pat in URGENCY_KEYWORDS if re.search(pat, text)]
     if urgency_found:
         score += 25
-        reasons.append("Urgency cues detected (e.g., action required, limited time, or deadline).")
+        reasons.append("Urgency cues detected (e.g., action required, expired session, or account lockout warning).")
         
     # Check for claim/refund language
     claim_found = [pat for pat in REPLY_TO_CLAIM_KEYWORDS if re.search(pat, text)]
     if claim_found:
         score += 35
-        reasons.append("Scam/refund solicitation language detected (e.g., 'reply to claim', 'ticket refund').")
+        reasons.append("Scam solicitation or identity verification language detected (e.g., 're-authenticate', 'refund your ticket').")
+        
+    # Check for quishing (QR phishing) keywords
+    quishing_found = [pat for pat in QUISHING_KEYWORDS if re.search(pat, text)]
+    if quishing_found:
+        score += 35
+        reasons.append("QR Code scanning request (Quishing indicator) detected in email content.")
         
     # Check for zero-payload check (no URLs/links)
     has_links = bool(re.search(r"https?://[^\s]+", text))
-    if not has_links and claim_found:
+    if not has_links and (claim_found or quishing_found):
         score += 30
-        reasons.append("Zero-payload scan signature: encourages reply via email with no links or attachments.")
+        reasons.append("Zero-payload scan signature: encourages direct response or offline QR scanning with no suspicious links.")
         
     return (score > 0), score, reasons

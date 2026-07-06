@@ -42,7 +42,7 @@ function MatrixRain({ className = '' }) {
 }
 
 // ─── Tool Card ────────────────────────────────────────────────────────────────
-function ToolCard({ icon, label, desc, badge, onClick, accentColor }) {
+function ToolCard({ icon, label, desc, badge, onClick, _accentColor }) {
   return (
     <button
       onClick={onClick}
@@ -366,7 +366,7 @@ export default function App() {
       {/* QR SCANNER                                                         */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       {activeTab === 'qr' && (
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 pb-28">
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 pb-36">
           <div className="pt-6 pb-2 flex items-center gap-3">
             <button
               onClick={() => { setActiveTab('home'); setCurrentRiskScore(0); }}
@@ -385,7 +385,7 @@ export default function App() {
       {/* EMAIL SCRUTINIZER                                                  */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       {activeTab === 'email' && (
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 pb-28">
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 pb-36">
           <div className="pt-6 pb-2 flex items-center gap-3">
             <button
               onClick={() => { setActiveTab('home'); setCurrentRiskScore(0); }}
@@ -399,6 +399,13 @@ export default function App() {
           <EmailCheck onScanComplete={handleScanComplete} />
         </main>
       )}
+
+      {/* Disclaimer */}
+      <div className="w-full text-center pb-20 pt-2 relative z-30 select-none px-4">
+        <p className="text-[9px] font-mono-tech text-slate-600 uppercase tracking-wider max-w-md mx-auto leading-relaxed">
+          Disclaimer: Threat analysis is advisory and model-based. Systems may make mistakes. Verify critical URLs and domains independently.
+        </p>
+      </div>
 
       {/* ── Bottom capsule nav ── */}
       <nav className="bottom-nav-capsule">

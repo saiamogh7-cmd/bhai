@@ -1,12 +1,13 @@
 import React, { useRef, useState } from 'react';
 
 export default function VerdictCard({ result }) {
+  // Hooks must be called unconditionally — before any early returns
+  const cardRef = useRef(null);
+  const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
+
   if (!result) return null;
 
   const { verdict, score, reasons, source } = result;
-  
-  const cardRef = useRef(null);
-  const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
 
   const handleMouseMove = (e) => {
     if (!cardRef.current) return;
@@ -31,6 +32,8 @@ export default function VerdictCard({ result }) {
   } else if (score >= 25) {
     riskLevel = 'MEDIUM';
   }
+
+  const isOfficialVerified = reasons && reasons.some(r => r.startsWith("Verified Sender"));
 
   const config = {
     HIGH: {
@@ -104,9 +107,16 @@ export default function VerdictCard({ result }) {
             </p>
           </div>
         </div>
-        <span className={`px-3 py-1 text-xs font-bold font-cyber-panel tracking-widest uppercase border rounded-md ${config.badge}`}>
-          {verdict} RISK
-        </span>
+        <div className="flex items-center gap-2">
+          {isOfficialVerified && (
+            <span className="px-2.5 py-1 text-[10px] font-bold font-mono-tech tracking-wider text-[#00c8ff] bg-[#002244]/60 border border-[#0055ff]/40 rounded flex items-center gap-1.5 animate-pulse">
+              <span className="text-xs">✔</span> VERIFIED SOURCE
+            </span>
+          )}
+          <span className={`px-3 py-1 text-xs font-bold font-cyber-panel tracking-widest uppercase border rounded-md ${config.badge}`}>
+            {verdict} RISK
+          </span>
+        </div>
       </div>
 
       {/* Main Score Area */}

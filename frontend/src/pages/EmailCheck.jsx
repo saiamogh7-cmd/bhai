@@ -9,6 +9,7 @@ export default function EmailCheck({ onScanComplete }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [result, setResult] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [showColdStartTip, setShowColdStartTip] = useState(false);
 
   const handleAnalyze = async () => {
     if (!content.trim()) return;
@@ -17,7 +18,13 @@ export default function EmailCheck({ onScanComplete }) {
     setErrorMsg('');
     setResult(null);
     setCurrentStep(0); // Step 1: PARSE
+    setShowColdStartTip(false);
     if (onScanComplete) onScanComplete(null);
+
+    // Show a helpful tip if the backend takes longer than 5.5s (due to a Render cold start)
+    const coldStartTimeoutId = setTimeout(() => {
+      setShowColdStartTip(true);
+    }, 5500);
 
     try {
       // Simulate scanning process flow (2.5s duration)
@@ -36,10 +43,14 @@ export default function EmailCheck({ onScanComplete }) {
         checkEmail(content)
       ]);
 
+      clearTimeout(coldStartTimeoutId);
+      setShowColdStartTip(false);
       setResult(apiResponse);
       setStatus('success');
       if (onScanComplete) onScanComplete(apiResponse);
     } catch (err) {
+      clearTimeout(coldStartTimeoutId);
+      setShowColdStartTip(false);
       console.error(err);
       setStatus('error');
       if (onScanComplete) onScanComplete(null);
@@ -134,6 +145,23 @@ Dear Fan, please reply to this email immediately...`}
               'Analyze Email Content'
             )}
           </button>
+
+          {/* Verified Senders Guide */}
+          <div className="mt-5 border-t border-slate-900/60 pt-4 text-left">
+            <span className="text-[9px] font-mono-tech text-[#00c8ff] tracking-widest uppercase block mb-2.5">
+              Verified Official Channels
+            </span>
+            <p className="text-[10px] text-slate-500 font-sans leading-relaxed mb-3">
+              Official World Cup 2026 emails will always originate from one of these certified sender domains and will show a <span className="text-[#00c8ff] font-bold">✔ Verified Badge</span> on successful check:
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {['fifa.com', 'fifaworldcup.com', 'visa.com', 'qatarairways.com', 'hyundai.com', 'coca-cola.com', 'adidas.com', 'budweiser.com'].map(d => (
+                <span key={d} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#002244]/40 border border-[#0055ff]/20 text-[9px] font-mono-tech text-[#33aaff]">
+                  <span className="text-[#00c8ff]">✔</span> {d}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Right column: Results Readout */}
@@ -163,6 +191,11 @@ Dear Fan, please reply to this email immediately...`}
                 {currentStep === 1 && <p className="text-slate-500 animate-pulse">[1/4] AUDITING ALLOWLISTS & TYPOSQUATS...</p>}
                 {currentStep === 2 && <p className="text-slate-500 animate-pulse">[2/4] DISPATCHING TO GEMINI CLASSIFIER...</p>}
                 {currentStep === 3 && <p className="text-slate-500 animate-pulse">[3/4] COMPILING RISK FACTORS...</p>}
+                {showColdStartTip && (
+                  <p className="text-amber-500 font-bold animate-pulse mt-4 text-[9px] uppercase tracking-widest border border-amber-500/20 bg-amber-950/20 px-2.5 py-1.5 rounded">
+                    ⚠️ Server cold start: Initializing container (may take up to 30s)...
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -180,7 +213,7 @@ Dear Fan, please reply to this email immediately...`}
               </p>
               <button
                 onClick={handleAnalyze}
-                className="mt-4 text-xs font-mono-tech text-[#00ff66] hover:underline block cursor-pointer"
+                className="w-full mt-4 border border-[#00ff66]/40 hover:bg-[#00ff66]/10 text-slate-200 hover:text-white font-bold font-mono-tech py-2.5 rounded-full transition-all duration-300 uppercase flex items-center justify-center gap-2 cursor-pointer text-xs"
               >
                 RE-RUN EVALUATION SIGNAL
               </button>

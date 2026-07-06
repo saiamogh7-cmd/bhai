@@ -7,8 +7,11 @@ export default function Hero3D() {
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const width = containerRef.current.clientWidth || 300;
-    const height = containerRef.current.clientHeight || 300;
+    // Capture the DOM node so the cleanup closure uses a stable reference
+    const container = containerRef.current;
+
+    const width = container.clientWidth || 300;
+    const height = container.clientHeight || 300;
 
     // 1. Scene Setup
     const scene = new THREE.Scene();
@@ -21,7 +24,7 @@ export default function Hero3D() {
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    containerRef.current.appendChild(renderer.domElement);
+    container.appendChild(renderer.domElement);
 
     // 4. Parallax Group
     const masterGroup = new THREE.Group();
@@ -40,14 +43,15 @@ export default function Hero3D() {
     const globeLines = new THREE.Mesh(globeGeometry, lineMaterial);
     masterGroup.add(globeLines);
 
-    // Node dots
+    // Node dots — clone geometry to avoid toNonIndexed() warning when sharing with Mesh
+    const globeNodeGeometry = globeGeometry.clone();
     const nodeMaterial = new THREE.PointsMaterial({
       color: 0x00ff66, // Pure Neon Green
       size: 0.07,
       transparent: true,
       opacity: 0.85,
     });
-    const globeNodes = new THREE.Points(globeGeometry, nodeMaterial);
+    const globeNodes = new THREE.Points(globeNodeGeometry, nodeMaterial);
     masterGroup.add(globeNodes);
 
     // 6. Central Shield/Core Icon (rotating inside the globe)
@@ -95,7 +99,7 @@ export default function Hero3D() {
     let targetY = 0;
 
     const handleMouseMove = (e) => {
-      const rect = containerRef.current.getBoundingClientRect();
+      const rect = container.getBoundingClientRect();
       const x = e.clientX - rect.left - rect.width / 2;
       const y = e.clientY - rect.top - rect.height / 2;
       targetX = x / rect.width;
@@ -144,9 +148,9 @@ export default function Hero3D() {
 
     // 10. Handle Resize
     const handleResize = () => {
-      if (!containerRef.current) return;
-      const w = containerRef.current.clientWidth;
-      const h = containerRef.current.clientHeight;
+      if (!container) return;
+      const w = container.clientWidth;
+      const h = container.clientHeight;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
@@ -158,12 +162,13 @@ export default function Hero3D() {
       cancelAnimationFrame(animationId);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('resize', handleResize);
-      if (containerRef.current && renderer.domElement) {
-        if (containerRef.current.contains(renderer.domElement)) {
-          containerRef.current.removeChild(renderer.domElement);
+      if (container && renderer.domElement) {
+        if (container.contains(renderer.domElement)) {
+          container.removeChild(renderer.domElement);
         }
       }
       globeGeometry.dispose();
+      globeNodeGeometry.dispose();
       lineMaterial.dispose();
       nodeMaterial.dispose();
       coreGeometry.dispose();
@@ -173,7 +178,6 @@ export default function Hero3D() {
       renderer.dispose();
     };
   }, []);
-
   return (
     <div 
       ref={containerRef} 

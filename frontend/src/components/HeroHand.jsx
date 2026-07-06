@@ -5,7 +5,7 @@ export default function HeroHand() {
       title="Matrix Hand"
       className="w-full h-[320px] sm:h-[500px] border-0"
       style={{ background: 'transparent', pointerEvents: 'none' }}
-      allowTransparency="true"
+      allowtransparency="true"
     />
   );
 }
